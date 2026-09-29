@@ -1,0 +1,37 @@
+RAJIV GANDHI PROUDYOGIKI VISHWAVIDYALAYA, BHOPAL
+New Scheme Based On AICTE Flexible Curricula
+B.Tech. Computer Science & Engineering / Information Technology
+IV Semester - CS-403 Database Management Systems
+[Page 1]
+Course Objectives:
+The objective of this course is to provide fundamental knowledge of Database Management Systems, concepts of data models, database design, query languages, and transaction processing.
+
+Unit-I: Introduction & Relational Data Model
+Database Systems vs. File Systems, View of Data, Data Models, Database Languages, Database Users and Administrators, Transaction Management, Database System Structure, Three-Schema Architecture, Data Independence (Physical and Logical).
+Entity-Relationship (ER) Model: Basic Concepts, Constraints, Keys, Design Issues, ER Diagrams, Weak Entity Sets, Extended ER Features (Generalization, Specialization, Aggregation), Conversion of ER model to Relational Database.
+
+Unit-II: Relational Model & SQL
+Structure of Relational Databases, Relational Algebra: Fundamental and Extended Operations (Select, Project, Union, Set Difference, Cartesian Product, Rename, Natural Join, Outer Join, Division).
+Tuple Relational Calculus, Domain Relational Calculus.
+SQL: Data Definition Language (DDL), Data Manipulation Language (DML), Integrity Constraints, Assertions, Views, Nested Subqueries, Aggregate Functions, Group By, Having, Joins, Triggers.
+
+[Page 2]
+Unit-III: Relational Database Design & Normalization
+Functional Dependencies, Axioms / Inference Rules for Functional Dependencies (Armstrong's Axioms), Closure of Set of Functional Dependencies, Closure of Attribute Sets, Canonical Cover.
+Pitfalls in Relational Database Design, Decomposition, Desirable Properties of Decomposition (Lossless-Join Decomposition, Dependency Preservation).
+Normal Forms: 1NF, 2NF, 3NF, Boyce-Codd Normal Form (BCNF), Multi-valued Dependencies and 4NF, Join Dependencies and 5NF (PJNF).
+
+Unit-IV: Transaction Processing & Concurrency Control
+Transaction Concepts, ACID Properties, Transaction States, Concurrent Executions, Serializability: Conflict Serializability, View Serializability, Testing for Serializability using Precedence Graphs, Recoverability, Cascading Rollbacks, Cascadeless Schedules.
+Concurrency Control: Lock-Based Protocols, Shared and Exclusive Locks, Granting of Locks, Two-Phase Locking (2PL), Strict 2PL, Rigorous 2PL, Timestamp-Based Protocols, Thomas' Write Rule, Validation-Based Protocols, Multiple Granularity Locking, Deadlock Handling: Deadlock Prevention, Deadlock Detection, Recovery from Deadlock, Wait-Die and Wound-Wait Schemes.
+
+Unit-V: Storage, Indexing & Query Processing
+Physical Storage Media, RAID Levels, File Organization, Organization of Records in Files, Data Dictionary Storage.
+Indexing and Hashing: Basic Concepts, Ordered Indices, Primary Index, Secondary Index, Clustering Index, B-Tree and B+ Tree Index Files (Search, Insert, Delete Operations), Static Hashing, Dynamic Hashing (Extendible Hashing).
+Query Processing: Overview, Measures of Query Cost, Selection Operation, Sorting, Join Operation, Evaluation of Expressions, Transformation of Relational Expressions (Query Optimization Heuristics).
+Recovery System: Failure Classification, Storage Structure, Recovery and Atomicity, Log-Based Recovery (Deferred Database Modification, Immediate Database Modification), Checkpoints, Shadow Paging, ARIES Recovery Algorithm Overview.
+
+References:
+1. Silberschatz, Korth, Sudarshan, "Database System Concepts", McGraw Hill.
+2. Elmasri, Navathe, "Fundamentals of Database Systems", Pearson Education.
+3. Raghu Ramakrishnan, Johannes Gehrke, "Database Management Systems", McGraw Hill.

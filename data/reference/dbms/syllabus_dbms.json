@@ -1,0 +1,159 @@
+{
+  "subject_name": "Database Management Systems",
+  "subject_code": "CS-403",
+  "branch": "Computer Science & Engineering / Information Technology",
+  "semester": 4,
+  "university": "Rajiv Gandhi Proudyogiki Vishwavidyalaya (RGPV), Bhopal",
+  "units": [
+    {
+      "unit_number": 1,
+      "unit_name": "Unit I: Introduction and Relational Model",
+      "topics": [
+        {
+          "topic_id": "dbms_u1_t1",
+          "title": "DBMS Architecture and Data Independence",
+          "subtopics": [
+            "Three-schema architecture",
+            "Physical and Logical Data Independence",
+            "Database users and administrators",
+            "DBMS vs File System"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p1"]
+        },
+        {
+          "topic_id": "dbms_u1_t2",
+          "title": "Entity Relationship (ER) Model and Enhanced ER",
+          "subtopics": [
+            "Entity types, Entity sets, Attributes and Keys",
+            "Relationship types and Cardinality constraints",
+            "ER diagrams and Weak entities",
+            "Generalization, Specialization, and Aggregation (EER)",
+            "Mapping ER diagrams to Relational Schemas"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p1"]
+        }
+      ]
+    },
+    {
+      "unit_number": 2,
+      "unit_name": "Unit II: Relational Languages and Integrity Constraints",
+      "topics": [
+        {
+          "topic_id": "dbms_u2_t1",
+          "title": "Relational Algebra and Relational Calculus",
+          "subtopics": [
+            "Fundamental operations: Select, Project, Union, Set Difference, Cartesian Product, Rename",
+            "Additional operations: Set Intersection, Natural Join, Theta Join, Division",
+            "Tuple Relational Calculus (TRC)",
+            "Domain Relational Calculus (DRC)"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p1"]
+        },
+        {
+          "topic_id": "dbms_u2_t2",
+          "title": "SQL and Relational Constraints",
+          "subtopics": [
+            "DDL, DML, DCL, and TCL commands",
+            "Primary Key, Foreign Key, Unique, Check, Not Null constraints",
+            "Complex queries, Nested subqueries, Correlated subqueries",
+            "Aggregations and Group By / Having clauses",
+            "Views, Triggers, and Assertions"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p1"]
+        }
+      ]
+    },
+    {
+      "unit_number": 3,
+      "unit_name": "Unit III: Database Design and Normalization",
+      "topics": [
+        {
+          "topic_id": "dbms_u3_t1",
+          "title": "Functional Dependencies and Decomposition",
+          "subtopics": [
+            "Functional Dependencies definition and inference rules (Armstrong axioms)",
+            "Closure of attribute sets and Minimal cover",
+            "Lossless Join Decomposition",
+            "Dependency Preservation"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p2"]
+        },
+        {
+          "topic_id": "dbms_u3_t2",
+          "title": "Normal Forms (1NF, 2NF, 3NF, BCNF, 4NF, 5NF)",
+          "subtopics": [
+            "First Normal Form (1NF)",
+            "Second Normal Form (2NF) and Partial Dependency",
+            "Third Normal Form (3NF) and Transitive Dependency",
+            "Boyce-Codd Normal Form (BCNF)",
+            "Multivalued Dependencies and 4NF",
+            "Join Dependencies and 5NF (PJNF)"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p2"]
+        }
+      ]
+    },
+    {
+      "unit_number": 4,
+      "unit_name": "Unit IV: Transaction Processing and Concurrency Control",
+      "topics": [
+        {
+          "topic_id": "dbms_u4_t1",
+          "title": "Transaction Concepts and ACID Properties",
+          "subtopics": [
+            "Transaction states and state transition diagram",
+            "ACID properties (Atomicity, Consistency, Isolation, Durability)",
+            "Concurrent execution anomalies: Dirty read, Non-repeatable read, Phantom read",
+            "Schedules, Serializability: Conflict Serializability and View Serializability",
+            "Precedence graph for testing Conflict Serializability",
+            "Recoverability, Cascading Aborts, Cascadeless Schedules"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p2"]
+        },
+        {
+          "topic_id": "dbms_u4_t2",
+          "title": "Concurrency Control and Deadlock Handling",
+          "subtopics": [
+            "Lock-based protocols: Shared and Exclusive locks",
+            "Two-Phase Locking (2PL), Strict 2PL, Rigorous 2PL",
+            "Timestamp Ordering protocol and Thomas Write Rule",
+            "Validation-based (Optimistic) protocols",
+            "Multiple Granularity locking",
+            "Deadlock prevention, detection, wait-die and wound-wait schemes"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p2"]
+        }
+      ]
+    },
+    {
+      "unit_number": 5,
+      "unit_name": "Unit V: Storage, Indexing, and Query Processing",
+      "topics": [
+        {
+          "topic_id": "dbms_u5_t1",
+          "title": "Storage Structures and File Organization",
+          "subtopics": [
+            "Storage hierarchy and RAID levels",
+            "Fixed-length and variable-length records",
+            "Ordered indices: Primary, Secondary, Clustering indices",
+            "B-Trees and B+ Trees: Search, Insertion, and Deletion algorithms",
+            "Static and Dynamic Hashing (Extendible Hashing)"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p2"]
+        },
+        {
+          "topic_id": "dbms_u5_t2",
+          "title": "Query Processing and Failure Recovery",
+          "subtopics": [
+            "Query processing steps: Parsing, Translation, Optimization, Execution",
+            "Cost estimation and Heuristics for query optimization",
+            "Log-based recovery: Deferred database modification and Immediate modification",
+            "Checkpoints and Write-Ahead Logging (WAL)",
+            "ARIES recovery algorithm overview"
+          ],
+          "source_refs": ["rgpv_cs403_syllabus:p2"]
+        }
+      ]
+    }
+  ]
+}

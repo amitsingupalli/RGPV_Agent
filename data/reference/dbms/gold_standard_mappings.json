@@ -1,0 +1,30 @@
+{
+  "benchmark_subject": "CS-403 Database Management Systems",
+  "total_questions": 24,
+  "mappings": [
+    { "question_id": "q_rgpv_2024_1a", "expected_topic_id": "dbms_u1_t1", "expected_unit": 1, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2024_1b", "expected_topic_id": "dbms_u1_t2", "expected_unit": 1, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2024_2a", "expected_topic_id": "dbms_u3_t2", "expected_unit": 3, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2024_2b", "expected_topic_id": "dbms_u3_t1", "expected_unit": 3, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2024_3a", "expected_topic_id": "dbms_u4_t1", "expected_unit": 4, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2024_3b", "expected_topic_id": "dbms_u4_t2", "expected_unit": 4, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2024_4a", "expected_topic_id": "dbms_u5_t1", "expected_unit": 5, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_1a", "expected_topic_id": "dbms_u1_t1", "expected_unit": 1, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_2a", "expected_topic_id": "dbms_u2_t1", "expected_unit": 2, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_2b", "expected_topic_id": "dbms_u2_t2", "expected_unit": 2, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_3a", "expected_topic_id": "dbms_u3_t1", "expected_unit": 3, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_4a", "expected_topic_id": "dbms_u4_t1", "expected_unit": 4, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_4b", "expected_topic_id": "dbms_u4_t2", "expected_unit": 4, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2023_5a", "expected_topic_id": "dbms_u5_t2", "expected_unit": 5, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2022_1a", "expected_topic_id": "dbms_u1_t2", "expected_unit": 1, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2022_2a", "expected_topic_id": "dbms_u3_t2", "expected_unit": 3, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2022_3a", "expected_topic_id": "dbms_u4_t1", "expected_unit": 4, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2022_4a", "expected_topic_id": "dbms_u5_t1", "expected_unit": 5, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2021_1a", "expected_topic_id": "dbms_u1_t1", "expected_unit": 1, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2021_2a", "expected_topic_id": "dbms_u3_t1", "expected_unit": 3, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2021_3a", "expected_topic_id": "dbms_u4_t2", "expected_unit": 4, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2020_1a", "expected_topic_id": "dbms_u2_t1", "expected_unit": 2, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2020_2a", "expected_topic_id": "dbms_u5_t2", "expected_unit": 5, "confidence_threshold": 0.85 },
+    { "question_id": "q_rgpv_2020_3a", "expected_topic_id": "dbms_u3_t2", "expected_unit": 3, "confidence_threshold": 0.85 }
+  ]
+}
