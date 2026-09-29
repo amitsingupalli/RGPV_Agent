@@ -1,0 +1,6 @@
+{
+  "name": "RGPV-Agent: Adaptive University Exam Preparation Agent",
+  "description": "Intelligent pedagogical exam preparation platform for engineering students (B.Tech CSE/IT CS-403 DBMS) featuring curriculum frequency analytics, deterministic study scheduling, grounded bilingual pedagogical reader, and rubric-verified quiz evaluation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
