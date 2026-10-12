@@ -1,6 +1,10 @@
 import os
 import pytest
+from fastapi.testclient import TestClient
 from app.tools.security_tools import SecurityGuardrails, SanitizationResult
+from app.main import app
+
+client = TestClient(app)
 
 
 def test_prompt_injection_sanitization():
@@ -36,27 +40,30 @@ def test_safe_academic_text_not_flagged():
 def test_path_traversal_guard():
     base_dir = os.path.abspath("uploads")
 
-    # Safe filename
     valid, err, path = SecurityGuardrails.validate_file_path(base_dir, "syllabus_cs403.pdf")
     assert valid is True
     assert err is None
     assert path.startswith(base_dir)
 
-    # Malicious path traversal
     valid_bad, err_bad, _ = SecurityGuardrails.validate_file_path(base_dir, "../../../windows/system32/cmd.exe")
-    # basename strips the ../ and leaves cmd.exe strictly inside base_dir, preventing escape
     assert valid_bad is True
 
 
 def test_pdf_magic_bytes_signature():
-    # Valid PDF header
     valid_pdf_bytes = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<<...>>"
     is_valid, err = SecurityGuardrails.validate_pdf_signature(valid_pdf_bytes)
     assert is_valid is True
     assert err is None
 
-    # Invalid / fake executable
     fake_exe_bytes = b"MZ\x90\x00\x03\x00\x00\x00"
     is_valid_exe, err_exe = SecurityGuardrails.validate_pdf_signature(fake_exe_bytes)
     assert is_valid_exe is False
     assert "magic bytes" in err_exe.lower()
+
+
+def test_api_security_headers():
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.headers.get("X-Content-Type-Options") == "nosniff"
+    assert res.headers.get("X-Frame-Options") == "DENY"
+    assert res.headers.get("X-XSS-Protection") == "1; mode=block"

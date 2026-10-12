@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
+from app.api.middleware import SecurityAndRateLimitMiddleware
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
 from app.api.plans import router as plans_router
@@ -13,11 +14,9 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure upload directory exists
     import os
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     yield
-    # Shutdown
 
 
 app = FastAPI(
@@ -26,6 +25,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+# Register Security & Rate Limiting Middleware
+app.add_middleware(SecurityAndRateLimitMiddleware, max_requests_per_minute=120)
 
 # CORS configuration
 app.add_middleware(

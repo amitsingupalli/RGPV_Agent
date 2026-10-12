@@ -7,6 +7,7 @@ from app.nodes.quiz import QuizGeneratorEngine, TopicQuiz
 from app.nodes.evaluation import RubricEvaluatorEngine, QuizEvaluationReport
 from app.nodes.verification import EvaluationVerifierEngine, EvaluationVerificationReport
 from app.services.mastery import MasteryEngine
+from app.tools.security_tools import SecurityGuardrails
 from app.api.documents import SYLLABUS_STORE, get_extracted_syllabus
 
 router = APIRouter(prefix="/quizzes", tags=["Interactive Quizzes & Teaching"])
@@ -93,7 +94,13 @@ async def submit_quiz_answers(
         ACTIVE_QUIZZES[quiz_id] = quiz
 
     quiz_dicts = [q.model_dump() for q in quiz.questions]
-    ans_dicts = [a.model_dump() for a in req.answers]
+    ans_dicts = []
+    for a in req.answers:
+        sanitized = SecurityGuardrails.sanitize_text(a.answer_text)
+        ans_dicts.append({
+            "question_id": a.question_id,
+            "answer_text": sanitized.sanitized_text
+        })
 
     # 1. Rubric Evaluation
     eval_report: QuizEvaluationReport = RubricEvaluatorEngine.evaluate_submission(
