@@ -1,0 +1,82 @@
+name: RGPV-Agent CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests-and-evals:
+    name: Backend Pytest & Agent Evals
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Full Pytest Suite (Models, Nodes, Graph, API, Security, Tracing)
+        env:
+          PYTHONPATH: .
+          APP_ENV: testing
+        run: |
+          pytest tests/ -v --tb=short
+
+      - name: Run Syllabus Extraction & Grounding Benchmark
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m evals.syllabus_bench
+
+      - name: Run PYQ Topic Classification Benchmark
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m evals.classification_bench
+
+      - name: Run Rubric Evaluator & Verifier Benchmark
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m evals.rubric_eval_bench
+
+  frontend-lint-and-build:
+    name: Frontend TypeScript Lint & Vite Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build production frontend bundle
+        run: npm run build
