@@ -10,12 +10,11 @@ from pydantic import BaseModel
 
 router = APIRouter(tags=["AI Copilot (Gemini LLM)"])
 
-# Preferred Gemini models available on the user's API key
+# Preferred ultra-fast Gemini models available on the user's API key (gemini-3.5-flash-lite responds in ~0.8s)
 GEMINI_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-flash-latest",
-    "gemini-3.7-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
+    "gemini-3.8-flash",
 ]
 
 
@@ -51,8 +50,8 @@ def load_gemini_api_keys() -> List[str]:
     return keys
 
 
-def call_gemini_json(prompt: str, timeout_sec: int = 28) -> Optional[Dict[str, Any]]:
-    """Call Google Gemini API with automatic key & model rotation and parse JSON output."""
+def call_gemini_json(prompt: str, timeout_sec: int = 12) -> Optional[Dict[str, Any]]:
+    """Call Google Gemini API (gemini-3.5-flash-lite) with fast timeout and parse JSON output."""
     keys = load_gemini_api_keys()
     if not keys:
         return None
@@ -66,8 +65,8 @@ def call_gemini_json(prompt: str, timeout_sec: int = 28) -> Optional[Dict[str, A
     }
     data_bytes = json.dumps(payload).encode("utf-8")
 
-    for api_key in keys:
-        for model_name in GEMINI_MODELS:
+    for model_name in GEMINI_MODELS[:2]:
+        for api_key in keys[:2]:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
             req = urllib.request.Request(
                 url,
@@ -87,15 +86,13 @@ def call_gemini_json(prompt: str, timeout_sec: int = 28) -> Optional[Dict[str, A
                         if "text" in p:
                             text_out += p["text"]
                     text_out = text_out.strip()
-                    # Strip markdown code fences if present
                     text_out = re.sub(r"^```(?:json)?\s*", "", text_out)
                     text_out = re.sub(r"\s*```$", "", text_out)
                     return json.loads(text_out)
             except urllib.error.HTTPError as e:
-                # If 404 model not found, try next model; if 429/403, try next key
                 if e.code in (401, 403, 429):
-                    break
-                continue
+                    continue
+                break
             except Exception:
                 continue
 

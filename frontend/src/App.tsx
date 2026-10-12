@@ -227,14 +227,14 @@ export default function App() {
     setProfile((prev) => ({ ...prev, language: lang }));
   };
 
-  // Complete initial setup from DocumentIngestionHub using Gemini AI curriculum (or built-in subject fallback)
+  // Complete initial setup from DocumentIngestionHub immediately (< 1 sec)
   const handleCompleteIngestion = (
-    customUnitMastery?: Record<string, number>,
-    aiGeneratedCurriculum?: { units: Unit[]; pyqs: PYQQuestion[] }
+    customUnitMastery?: Record<string, number>
   ) => {
-    const { units: subjectUnits, pyqs: subjectPyqs } =
-      aiGeneratedCurriculum ||
-      getCurriculumForSubject(profile.subjectCode, profile.subjectName);
+    const { units: subjectUnits, pyqs: subjectPyqs } = getCurriculumForSubject(
+      profile.subjectCode,
+      profile.subjectName
+    );
 
     // Initialize units with user's chosen starting level (default 0% when starting from 0)
     const initializedUnits: Unit[] = subjectUnits.map((unit) => {
