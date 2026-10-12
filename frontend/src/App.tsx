@@ -476,6 +476,8 @@ export default function App() {
           <TopicLearningView
             currentTopic={currentTopic}
             allUnits={units}
+            subjectCode={profile.subjectCode}
+            subjectName={profile.subjectName}
             language={profile.language}
             onLanguageChange={handleLanguageChange}
             onSelectTopic={(id) => setSelectedTopicId(id)}
