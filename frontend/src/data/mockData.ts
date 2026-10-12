@@ -3,7 +3,7 @@ import { Unit, PYQQuestion, DaySchedule, StudentProfile, LangGraphTraceNode } fr
 export const initialStudentProfile: StudentProfile = {
   studentName: '',
   university: 'RGPV Bhopal',
-  program: '',
+  program: 'B.Tech',
   branch: '',
   semester: '',
   subjectCode: '',

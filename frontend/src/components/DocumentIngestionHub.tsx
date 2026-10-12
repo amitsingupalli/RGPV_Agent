@@ -271,16 +271,11 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                   Degree Program *
                 </label>
                 <select
-                  value={profile.program}
+                  value={profile.program || 'B.Tech'}
                   onChange={(e) => onUpdateProfile({ program: e.target.value })}
                   className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="">-- Select Program --</option>
-                  <option value="B.Tech">B.Tech</option>
-                  <option value="B.E">B.E</option>
-                  <option value="M.Tech">M.Tech</option>
-                  <option value="MCA">MCA</option>
-                  <option value="BCA">BCA</option>
+                  <option value="B.Tech">B.Tech (Bachelor of Technology)</option>
                 </select>
               </div>
 
@@ -319,13 +314,21 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                 <option value="Computer Science & Engineering (CSE)">
                   Computer Science &amp; Engineering (CSE)
                 </option>
-                <option value="Information Technology (IT)">Information Technology (IT)</option>
-                <option value="CSE (AI & Machine Learning)">CSE (AI &amp; Machine Learning)</option>
-                <option value="CSE (Data Science)">CSE (Data Science)</option>
-                <option value="Electronics & Communication (ECE)">Electronics &amp; Communication (ECE)</option>
-                <option value="Electrical Engineering (EE)">Electrical Engineering (EE)</option>
-                <option value="Mechanical Engineering (ME)">Mechanical Engineering (ME)</option>
-                <option value="Civil Engineering">Civil Engineering</option>
+                <option value="CSE (AI & Machine Learning)">
+                  CSE (AI &amp; Machine Learning)
+                </option>
+                <option value="CSE (Data Science)">
+                  CSE (Data Science)
+                </option>
+                <option value="CSE (Cyber Security)">
+                  CSE (Cyber Security)
+                </option>
+                <option value="CSE (IoT & Cyber Security)">
+                  CSE (IoT &amp; Cyber Security)
+                </option>
+                <option value="Electronics & Communication Engineering (ECE)">
+                  Electronics &amp; Communication Engineering (ECE)
+                </option>
               </select>
             </div>
 
