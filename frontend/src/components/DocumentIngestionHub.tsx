@@ -1,318 +1,504 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Upload, 
   FileText, 
   CheckCircle2, 
   Sliders, 
-  Calendar, 
-  Clock, 
-  Award, 
-  ShieldCheck, 
-  Sparkles, 
   ArrowRight, 
   RefreshCw, 
-  Layers, 
-  Database,
   Trash2,
-  FileCheck
+  FileCheck,
+  User,
+  BookOpen,
+  AlertCircle,
+  Clock
 } from 'lucide-react';
-import { StudentProfile, Language } from '../types';
+import { 
+  StudentProfile, 
+  UploadedDocumentItem, 
+  StudyTimeSlot, 
+  StartingPreparationLevel 
+} from '../types';
+import { curriculumUnits } from '../data/mockData';
 
 interface DocumentIngestionHubProps {
   profile: StudentProfile;
+  files: UploadedDocumentItem[];
+  onUpdateFiles: React.Dispatch<React.SetStateAction<UploadedDocumentItem[]>>;
   onUpdateProfile: (updates: Partial<StudentProfile>) => void;
-  onCompleteIngestion: () => void;
-}
-
-interface UploadedFile {
-  id: string;
-  name: string;
-  size: string;
-  pages: number;
-  category: 'Syllabus' | 'PYQ';
-  status: 'ready' | 'processing' | 'verified';
-  progress: number;
+  onCompleteIngestion: (customUnitMastery?: Record<string, number>) => void;
 }
 
 export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
   profile,
+  files,
+  onUpdateFiles,
   onUpdateProfile,
   onCompleteIngestion,
 }) => {
-  const [currentStep, setCurrentStep] = useState<number>(2); // 1. Setup, 2. Ingestion, 3. Extraction
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const [extractionStageText, setExtractionStageText] = useState<string>('');
+  const [uploadCategory, setUploadCategory] = useState<'Syllabus' | 'PYQ' | 'Notes'>('Syllabus');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const [files, setFiles] = useState<UploadedFile[]>([
-    {
-      id: 'f-1',
-      name: 'RGPV_CS403_Official_Syllabus_2024.pdf',
-      size: '2.4 MB',
-      pages: 6,
-      category: 'Syllabus',
-      status: 'verified',
-      progress: 100,
-    },
-    {
-      id: 'f-2',
-      name: 'RGPV_DBMS_Past_Papers_2020_2024_Compiled.pdf',
-      size: '14.8 MB',
-      pages: 26,
-      category: 'PYQ',
-      status: 'verified',
-      progress: 100,
-    },
-  ]);
+  // Custom per-unit starting confidence when user chooses 'custom'
+  const [customUnitMastery, setCustomUnitMastery] = useState<Record<string, number>>({
+    'unit-1': 0,
+    'unit-2': 0,
+    'unit-3': 0,
+    'unit-4': 0,
+    'unit-5': 0,
+  });
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Calculate days remaining when user picks an exam date
+  const handleExamDateChange = (dateStr: string) => {
+    if (!dateStr) {
+      onUpdateProfile({ examDate: '' });
+      return;
+    }
+    const picked = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffMs = picked.getTime() - today.getTime();
+    const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    onUpdateProfile({
+      examDate: dateStr,
+      daysRemaining: diffDays,
+    });
+  };
+
+  // Real browser file input handler
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    const added: UploadedDocumentItem[] = Array.from(selectedFiles).map((file, idx) => {
+      const sizeKB = file.size / 1024;
+      const sizeFormatted =
+        sizeKB >= 1024
+          ? `${(sizeKB / 1024).toFixed(2)} MB`
+          : `${Math.max(1, Math.round(sizeKB))} KB`;
+      const estimatedPages = Math.max(1, Math.min(60, Math.round(sizeKB / 65) || 4));
+
+      return {
+        id: `doc-${Date.now()}-${idx}`,
+        name: file.name,
+        size: sizeFormatted,
+        pages: estimatedPages,
+        category: uploadCategory,
+        status: 'verified',
+        progress: 100,
+      };
+    });
+
+    onUpdateFiles((prev) => [...prev, ...added]);
+    setValidationError(null);
+    e.target.value = '';
+  };
+
+  // Quick-fill helper for users who want to test with the reference RGPV CS-501 DBMS data
+  const handleFillSampleCourse = () => {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + 14);
+    const isoDate = futureDate.toISOString().split('T')[0];
+
+    onUpdateProfile({
+      studentName: profile.studentName || 'Student',
+      university: 'RGPV Bhopal',
+      program: 'B.Tech',
+      branch: 'Computer Science & Engineering (CSE)',
+      semester: '5th Semester (V)',
+      subjectCode: 'CS-501',
+      subjectName: 'Database Management Systems (DBMS)',
+      maxExamMarks: 70,
+      targetScore: 55,
+      dailyHoursCap: 2.5,
+      bufferDays: 2,
+      preferredStudySlot: 'morning',
+      startingLevel: 'zero',
+      examDate: isoDate,
+      daysRemaining: 14,
+    });
+
+    if (files.length === 0) {
+      onUpdateFiles([
+        {
+          id: 'sample-syl',
+          name: 'RGPV_CS501_DBMS_Syllabus.pdf',
+          size: '1.2 MB',
+          pages: 4,
+          category: 'Syllabus',
+          status: 'verified',
+          progress: 100,
+        },
+        {
+          id: 'sample-pyq',
+          name: 'RGPV_CS501_PYQ_2020_2024.pdf',
+          size: '4.8 MB',
+          pages: 18,
+          category: 'PYQ',
+          status: 'verified',
+          progress: 100,
+        },
+      ]);
+    }
+    setValidationError(null);
+  };
+
+  const handleRemoveFile = (id: string) => {
+    onUpdateFiles((prev) => prev.filter((f) => f.id !== id));
+  };
 
   const handleStartExtraction = () => {
+    // Validate required user inputs so we never assume missing fields
+    if (!profile.program.trim() || !profile.branch.trim() || !profile.semester.trim()) {
+      setValidationError('Please select your Program, Branch, and Semester before continuing.');
+      return;
+    }
+    if (!profile.subjectCode.trim() || !profile.subjectName.trim()) {
+      setValidationError('Please enter your Subject Code and Subject Name.');
+      return;
+    }
+    if (files.length === 0) {
+      setValidationError('Please upload at least one Syllabus or PYQ file (or click "Load Sample CS-501 Data" to test).');
+      return;
+    }
+
+    setValidationError(null);
     setIsExtracting(true);
-    setCurrentStep(3);
-    setExtractionProgress(10);
-    setExtractionStageText('PyMuPDF parsing 32 document pages and preserving bbox layout...');
+    const totalPages = files.reduce((acc, f) => acc + f.pages, 0);
+
+    setExtractionProgress(15);
+    setExtractionStageText(`Reading ${files.length} document(s) (${totalPages} pages)...`);
 
     setTimeout(() => {
-      setExtractionProgress(35);
-      setExtractionStageText('Extracting 24 past exam questions across 2020–2024...');
-    }, 600);
+      setExtractionProgress(45);
+      setExtractionStageText(`Extracting syllabus units & past exam questions for ${profile.subjectCode}...`);
+    }, 500);
 
     setTimeout(() => {
-      setExtractionProgress(70);
-      setExtractionStageText('Mapping questions to 5 curriculum units & computing frequency scores...');
-    }, 1300);
-
-    setTimeout(() => {
-      setExtractionProgress(95);
-      setExtractionStageText('Synthesizing 7-section pedagogical reader & generating priority timetable...');
-    }, 2000);
+      setExtractionProgress(80);
+      setExtractionStageText(
+        `Building ${profile.daysRemaining}-day schedule (${profile.dailyHoursCap} hrs/day cap, ${profile.bufferDays} buffer days)...`
+      );
+    }, 1100);
 
     setTimeout(() => {
       setExtractionProgress(100);
       setIsExtracting(false);
-      onCompleteIngestion();
-    }, 2600);
-  };
-
-  const handleSimulateAddFile = (category: 'Syllabus' | 'PYQ') => {
-    const newId = `f-${Date.now()}`;
-    const newFile: UploadedFile = {
-      id: newId,
-      name: category === 'Syllabus' 
-        ? 'RGPV_CSE_Syllabus_Revision_Addendum.pdf' 
-        : `RGPV_DBMS_MidSem_QuestionBank_2025.pdf`,
-      size: '3.1 MB',
-      pages: 8,
-      category,
-      status: 'verified',
-      progress: 100,
-    };
-    setFiles((prev) => [...prev, newFile]);
-  };
-
-  const handleRemoveFile = (id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+      onCompleteIngestion(
+        profile.startingLevel === 'custom' ? customUnitMastery : undefined
+      );
+    }, 1600);
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12">
-      {/* Top Header: Step Indicator */}
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+      {/* Top Banner */}
       <div className="border border-[#27272a] rounded-xl bg-[#121214] p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
-              Academic Setup & Curriculum Ingestion Hub
+              Step 1: Course Setup &amp; Document Upload
             </h1>
             <p className="text-xs text-zinc-400 mt-1">
-              Feed official university documents for automated question frequency extraction and constraint-aware scheduling.
+              Enter your academic details, study constraints, and current preparation level, then upload your syllabus and past question papers.
             </p>
           </div>
 
-          {/* Step Progress Pill */}
-          <div className="flex items-center gap-2">
-            {[
-              { num: 1, label: 'Academic Setup' },
-              { num: 2, label: 'Document Ingestion' },
-              { num: 3, label: 'AI Curriculum Extraction' },
-            ].map((step, idx) => {
-              const isPassed = currentStep > step.num;
-              const isCurrent = currentStep === step.num;
-              return (
-                <React.Fragment key={step.num}>
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-mono font-semibold transition-colors ${
-                        isPassed
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                          : isCurrent
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'bg-zinc-800 text-zinc-500'
-                      }`}
-                    >
-                      {isPassed ? '✓' : step.num}
-                    </span>
-                    <span
-                      className={`text-xs font-medium hidden lg:inline ${
-                        isCurrent ? 'text-zinc-200' : 'text-zinc-500'
-                      }`}
-                    >
-                      {step.label}
-                    </span>
-                  </div>
-                  {idx < 2 && <span className="text-zinc-700 text-xs hidden lg:inline">&rarr;</span>}
-                </React.Fragment>
-              );
-            })}
-          </div>
+          <button
+            type="button"
+            onClick={handleFillSampleCourse}
+            className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-indigo-300 border border-indigo-500/30 transition-colors shrink-0 cursor-pointer"
+          >
+            Quick-Fill Sample CS-501 (DBMS) Data
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: Academic Metadata & Constraints Setup (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-5">
+      {/* Validation Banner if user misses required inputs */}
+      {validationError && (
+        <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/40 flex items-center gap-2.5 text-xs text-rose-200">
+          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{validationError}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Student Profile, Course & Study Constraints (6 cols) */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* Card 1: Student & Subject Details */}
+          <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
-              <Sliders className="w-4 h-4 text-indigo-400" />
+              <User className="w-4 h-4 text-indigo-400" />
               <h2 className="text-sm font-semibold text-zinc-100">
-                1. Academic Degree & Target Configuration
+                1. Student &amp; Subject Details
               </h2>
             </div>
 
-            {/* University & Degree Dropdowns */}
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Academic Program
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Your Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Amit"
+                  value={profile.studentName}
+                  onChange={(e) => onUpdateProfile({ studentName: e.target.value })}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  University / Scheme
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., RGPV Bhopal"
+                  value={profile.university}
+                  onChange={(e) => onUpdateProfile({ university: e.target.value })}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Degree Program *
                 </label>
                 <select
                   value={profile.program}
                   onChange={(e) => onUpdateProfile({ program: e.target.value })}
-                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="B.Tech">B.Tech (Bachelor of Technology)</option>
-                  <option value="B.E">B.E (Bachelor of Engineering)</option>
-                  <option value="M.Tech">M.Tech (Computer Science)</option>
+                  <option value="">-- Select Program --</option>
+                  <option value="B.Tech">B.Tech</option>
+                  <option value="B.E">B.E</option>
+                  <option value="M.Tech">M.Tech</option>
+                  <option value="MCA">MCA</option>
+                  <option value="BCA">BCA</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Branch / Specialization
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Semester *
                 </label>
                 <select
-                  value={profile.branch}
-                  onChange={(e) => onUpdateProfile({ branch: e.target.value })}
-                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                  value={profile.semester}
+                  onChange={(e) => onUpdateProfile({ semester: e.target.value })}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="Computer Science & Engineering">
-                    Computer Science & Engineering (CSE)
-                  </option>
-                  <option value="Information Technology">Information Technology (IT)</option>
-                  <option value="CSE (Artificial Intelligence & ML)">CSE (AI & ML)</option>
-                  <option value="CSE (Data Science)">CSE (Data Science)</option>
+                  <option value="">-- Select Semester --</option>
+                  <option value="1st Semester (I)">1st Semester (I)</option>
+                  <option value="2nd Semester (II)">2nd Semester (II)</option>
+                  <option value="3rd Semester (III)">3rd Semester (III)</option>
+                  <option value="4th Semester (IV)">4th Semester (IV)</option>
+                  <option value="5th Semester (V)">5th Semester (V)</option>
+                  <option value="6th Semester (VI)">6th Semester (VI)</option>
+                  <option value="7th Semester (VII)">7th Semester (VII)</option>
+                  <option value="8th Semester (VIII)">8th Semester (VIII)</option>
                 </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                    Semester
-                  </label>
-                  <select
-                    value={profile.semester}
-                    onChange={(e) => onUpdateProfile({ semester: e.target.value })}
-                    className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500 transition-colors"
-                  >
-                    <option value="4th Semester (IV)">4th Semester (IV)</option>
-                    <option value="5th Semester (V)">5th Semester (V)</option>
-                    <option value="6th Semester (VI)">6th Semester (VI)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                    Exam Date
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={profile.examDate}
-                      onChange={(e) => onUpdateProfile({ examDate: e.target.value })}
-                      className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500 transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Subject & Course Code
-                </label>
-                <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a] flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-zinc-200">
-                      {profile.subjectName}
-                    </span>
-                    <p className="text-[11px] text-zinc-500 mt-0.5">
-                      RGPV Bhopal Affiliated Curriculum
-                    </p>
-                  </div>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                    {profile.subjectCode}
-                  </span>
-                </div>
               </div>
             </div>
 
-            {/* Target Score & Daily Hours Constraints Sliders */}
-            <div className="pt-4 border-t border-zinc-800 space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">
+                Branch / Specialization *
+              </label>
+              <select
+                value={profile.branch}
+                onChange={(e) => onUpdateProfile({ branch: e.target.value })}
+                className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">-- Select Branch --</option>
+                <option value="Computer Science & Engineering (CSE)">
+                  Computer Science &amp; Engineering (CSE)
+                </option>
+                <option value="Information Technology (IT)">Information Technology (IT)</option>
+                <option value="CSE (AI & Machine Learning)">CSE (AI &amp; Machine Learning)</option>
+                <option value="CSE (Data Science)">CSE (Data Science)</option>
+                <option value="Electronics & Communication (ECE)">Electronics &amp; Communication (ECE)</option>
+                <option value="Electrical Engineering (EE)">Electrical Engineering (EE)</option>
+                <option value="Mechanical Engineering (ME)">Mechanical Engineering (ME)</option>
+                <option value="Civil Engineering">Civil Engineering</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-zinc-400 font-medium">Target Exam Score</span>
-                  <span className="font-mono text-emerald-400 font-semibold">
-                    {profile.targetScore} / 100 Marks
-                  </span>
-                </div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Subject Code *
+                </label>
                 <input
-                  type="range"
-                  min="50"
-                  max="98"
-                  value={profile.targetScore}
-                  onChange={(e) => onUpdateProfile({ targetScore: Number(e.target.value) })}
-                  className="w-full accent-indigo-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
+                  type="text"
+                  placeholder="e.g., CS-501"
+                  value={profile.subjectCode}
+                  onChange={(e) => onUpdateProfile({ subjectCode: e.target.value.toUpperCase() })}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
                 />
-                <div className="flex justify-between text-[10px] text-zinc-500 mt-1 font-mono">
-                  <span>Pass (50M)</span>
-                  <span>Distinction (75M)</span>
-                  <span>Gold Medalist (90M+)</span>
-                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Subject Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Database Management Systems"
+                  value={profile.subjectName}
+                  onChange={(e) => onUpdateProfile({ subjectName: e.target.value })}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Exam Timeline, Study Constraints & Starting Level */}
+          <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800">
+              <Sliders className="w-4 h-4 text-indigo-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">
+                2. Your Study Constraints &amp; Starting Level
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Target Exam Date
+                </label>
+                <input
+                  type="date"
+                  value={profile.examDate}
+                  onChange={(e) => handleExamDateChange(e.target.value)}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
               <div>
-                <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="text-zinc-400 font-medium">
-                    Strict Daily Study Cap (Constraint)
-                  </span>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Days Left Until Exam
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={profile.daysRemaining}
+                  onChange={(e) =>
+                    onUpdateProfile({
+                      daysRemaining: Math.max(1, Math.min(60, Number(e.target.value) || 1)),
+                    })
+                  }
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Daily Hours & Buffer Days */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-zinc-400 font-medium">Daily Study Hours</span>
                   <span className="font-mono text-indigo-400 font-semibold">
-                    {profile.dailyHoursCap.toFixed(1)} hrs/day max
+                    {profile.dailyHoursCap.toFixed(1)} hrs/day
                   </span>
                 </div>
                 <input
                   type="range"
                   min="1.0"
-                  max="5.0"
+                  max="8.0"
                   step="0.5"
                   value={profile.dailyHoursCap}
                   onChange={(e) => onUpdateProfile({ dailyHoursCap: Number(e.target.value) })}
                   className="w-full accent-indigo-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
                 />
-                <p className="text-[11px] text-zinc-500 mt-1">
-                  The algorithm strictly clamps scheduled sessions to stay within this daily ceiling.
-                </p>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                  Primary Explanation Style
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Pre-Exam Revision Buffer Days
+                </label>
+                <select
+                  value={profile.bufferDays}
+                  onChange={(e) => onUpdateProfile({ bufferDays: Number(e.target.value) })}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value={0}>0 Buffer Days (Study till last day)</option>
+                  <option value={1}>1 Buffer Day before exam</option>
+                  <option value={2}>2 Buffer Days before exam</option>
+                  <option value={3}>3 Buffer Days before exam</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Max Marks & Target Marks */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Exam Paper Total Marks
+                </label>
+                <select
+                  value={profile.maxExamMarks}
+                  onChange={(e) => {
+                    const newMax = Number(e.target.value);
+                    onUpdateProfile({
+                      maxExamMarks: newMax,
+                      targetScore: Math.min(profile.targetScore, newMax),
+                    });
+                  }}
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value={70}>70 Marks (RGPV Theory Paper)</option>
+                  <option value={100}>100 Marks (Full Assessment)</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-zinc-400 font-medium">Your Target Marks</span>
+                  <span className="font-mono text-emerald-400 font-semibold">
+                    {profile.targetScore} / {profile.maxExamMarks}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={Math.round(profile.maxExamMarks * 0.35)}
+                  max={profile.maxExamMarks}
+                  value={profile.targetScore}
+                  onChange={(e) => onUpdateProfile({ targetScore: Number(e.target.value) })}
+                  className="w-full accent-emerald-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Preferred Study Time & Language */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Preferred Study Time Slot
+                </label>
+                <select
+                  value={profile.preferredStudySlot}
+                  onChange={(e) =>
+                    onUpdateProfile({ preferredStudySlot: e.target.value as StudyTimeSlot })
+                  }
+                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="morning">Morning Session</option>
+                  <option value="afternoon">Afternoon Session</option>
+                  <option value="night">Night Owl Session</option>
+                  <option value="flexible">Flexible / Any Time</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Preferred Notes Language
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -324,7 +510,7 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                         : 'bg-[#121214] border-[#27272a] text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    English (Academic)
+                    English
                   </button>
                   <button
                     type="button"
@@ -335,132 +521,292 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                         : 'bg-[#121214] border-[#27272a] text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    Hinglish (Conversational)
+                    Hinglish
                   </button>
                 </div>
               </div>
             </div>
+
+            {/* Current Preparation Level (Starting from 0 by default!) */}
+            <div className="pt-2 border-t border-zinc-800 space-y-2.5">
+              <label className="block text-xs font-medium text-zinc-300">
+                How much of this subject have you studied so far?
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {[
+                  { id: 'zero', label: 'Starting from 0 (0%)', desc: 'Fresh start' },
+                  { id: 'basics', label: 'Know Basics (~25%)', desc: 'Attended lectures' },
+                  { id: 'custom', label: 'Rate Each Unit', desc: 'Set per-unit %' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() =>
+                      onUpdateProfile({ startingLevel: opt.id as StartingPreparationLevel })
+                    }
+                    className={`p-2.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                      profile.startingLevel === opt.id
+                        ? 'bg-indigo-950/30 border-indigo-500 text-zinc-100'
+                        : 'bg-[#121214] border-[#27272a] text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <div className="text-xs font-semibold">{opt.label}</div>
+                    <div className="text-[10px] text-zinc-500">{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Per-unit sliders if user selects 'custom' */}
+              {profile.startingLevel === 'custom' && (
+                <div className="p-3.5 rounded-lg bg-[#121214] border border-zinc-800 space-y-2.5 mt-2">
+                  <span className="text-[11px] text-zinc-400 block">
+                    Rate your current confidence in each unit (0% = not started):
+                  </span>
+                  {curriculumUnits.map((u) => (
+                    <div key={u.id} className="space-y-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-zinc-300 truncate pr-2">
+                          {u.code}: {u.title}
+                        </span>
+                        <span className="font-mono text-indigo-400">
+                          {customUnitMastery[u.id] ?? 0}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={90}
+                        step={5}
+                        value={customUnitMastery[u.id] ?? 0}
+                        onChange={(e) =>
+                          setCustomUnitMastery((prev) => ({
+                            ...prev,
+                            [u.id]: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-indigo-500 bg-zinc-800 h-1 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right Column: Document Dropzones & Extraction Trigger (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-6">
+        {/* Right Column: Real Document Upload & Plan Generation (6 cols) */}
+        <div className="lg:col-span-6 space-y-6">
+          <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-indigo-400" />
                 <h2 className="text-sm font-semibold text-zinc-100">
-                  2. Document Vault & Verified Upload Dropzones
+                  3. Upload Syllabus, PYQ Papers &amp; Notes
                 </h2>
               </div>
               <span className="text-xs font-mono text-zinc-400">
-                {files.length} Documents Loaded
+                {files.length} {files.length === 1 ? 'File' : 'Files'} Uploaded
               </span>
             </div>
 
-            {/* Drag & Drop Surface */}
-            <div className="border-2 border-dashed border-[#27272a] hover:border-indigo-500/50 rounded-xl p-6 text-center bg-[#121214]/60 transition-colors">
+            {/* Category selector before picking file */}
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="text-zinc-400">Document Type to Upload:</span>
+              <div className="flex items-center gap-1.5">
+                {(['Syllabus', 'PYQ', 'Notes'] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setUploadCategory(cat)}
+                    className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors cursor-pointer ${
+                      uploadCategory === cat
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                        : 'bg-[#121214] border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Hidden Native File Input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt"
+              multiple
+              onChange={handleFileInputChange}
+              className="hidden"
+            />
+
+            {/* Upload Dropzone */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-[#27272a] hover:border-indigo-500/60 rounded-xl p-6 text-center bg-[#121214]/60 transition-colors cursor-pointer"
+            >
               <div className="max-w-md mx-auto space-y-3">
                 <div className="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center mx-auto border border-indigo-500/20">
                   <Upload className="w-5 h-5" />
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-zinc-200">
-                    Drop Official RGPV Syllabus & PYQ PDF Bundles
+                    Click to select {uploadCategory} PDF or Text files from your computer
                   </p>
                   <p className="text-[11px] text-zinc-500 mt-1">
-                    Accepts text-searchable PDFs (2020–2024 university examinations supported).
+                    Supports university syllabus PDFs, past question papers (PYQs), and class notes.
                   </p>
                 </div>
 
-                <div className="flex justify-center gap-3 pt-2">
+                <div className="flex flex-wrap justify-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => handleSimulateAddFile('Syllabus')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setUploadCategory('Syllabus');
+                      fileInputRef.current?.click();
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 transition-colors border border-zinc-700 cursor-pointer"
                   >
-                    + Add Syllabus PDF
+                    Choose Syllabus File
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleSimulateAddFile('PYQ')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setUploadCategory('PYQ');
+                      fileInputRef.current?.click();
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-xs text-indigo-300 transition-colors border border-indigo-500/30 font-medium cursor-pointer"
                   >
-                    + Add Past Year Paper Bundle
+                    Choose PYQ Paper
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Ingested Documents List */}
-            <div className="space-y-3">
+            {/* Uploaded Files List (Starts at 0 for a new user) */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>Ingested Verified Sources</span>
-                <span className="flex items-center gap-1 text-[11px] text-emerald-400">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Page Boundaries & BBoxes Preserved
-                </span>
+                <span>Uploaded Documents</span>
+                {files.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateFiles([])}
+                    className="text-[11px] text-zinc-500 hover:text-rose-400 cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
               </div>
 
-              <div className="space-y-2.5">
-                {files.map((file) => (
-                  <div
-                    key={file.id}
-                    className="p-3.5 rounded-lg bg-[#121214] border border-[#27272a] flex items-center justify-between text-xs hover:border-zinc-700 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="p-2 rounded bg-zinc-800 text-indigo-400 shrink-0">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-zinc-200 truncate">
-                            {file.name}
-                          </span>
-                          <span
-                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                              file.category === 'Syllabus'
-                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                            }`}
-                          >
-                            {file.category}
-                          </span>
+              {files.length === 0 ? (
+                <div className="p-6 rounded-xl bg-[#121214] border border-zinc-800/80 text-center space-y-2">
+                  <BookOpen className="w-5 h-5 text-zinc-600 mx-auto" />
+                  <p className="text-xs text-zinc-400 font-medium">
+                    No documents uploaded yet (Starting from 0)
+                  </p>
+                  <p className="text-[11px] text-zinc-500">
+                    Upload your PDF files above, or click &ldquo;Quick-Fill Sample CS-501 Data&rdquo; at the top right to try with sample RGPV DBMS papers.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {files.map((file) => (
+                    <div
+                      key={file.id}
+                      className="p-3 rounded-lg bg-[#121214] border border-[#27272a] flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded bg-zinc-800 text-indigo-400 shrink-0">
+                          <FileText className="w-4 h-4" />
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-zinc-500 mt-0.5 font-mono">
-                          <span>{file.pages} Pages</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{file.size}</span>
-                          <span aria-hidden="true">·</span>
-                          <span className="text-emerald-400 flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Checksum Verified
-                          </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-zinc-200 truncate">
+                              {file.name}
+                            </span>
+                            <span
+                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                file.category === 'Syllabus'
+                                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                  : file.category === 'PYQ'
+                                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              }`}
+                            >
+                              {file.category}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-zinc-500 mt-0.5 font-mono">
+                            <span>~{file.pages} Pages</span>
+                            <span>·</span>
+                            <span>{file.size}</span>
+                            <span>·</span>
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Ready
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 pl-3 shrink-0">
                       <button
+                        type="button"
                         onClick={() => handleRemoveFile(file.id)}
-                        className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-colors cursor-pointer"
-                        title="Remove Document"
+                        className="p-1.5 rounded text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-colors cursor-pointer"
+                        title="Remove file"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Summary of User's Selected Settings Before Building Plan */}
+            <div className="p-3.5 rounded-xl bg-[#121214] border border-zinc-800/80 space-y-2 text-xs">
+              <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Your Configured Plan Summary:</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] font-mono text-zinc-400">
+                <div>
+                  Subject: <strong className="text-zinc-200">{profile.subjectCode || 'Not set'}</strong>
+                </div>
+                <div>
+                  Timeline: <strong className="text-zinc-200">{profile.daysRemaining} Days</strong>
+                </div>
+                <div>
+                  Daily Limit: <strong className="text-zinc-200">{profile.dailyHoursCap} hrs/day</strong>
+                </div>
+                <div>
+                  Buffer Days: <strong className="text-zinc-200">{profile.bufferDays} days</strong>
+                </div>
+                <div>
+                  Starting Mastery:{' '}
+                  <strong className="text-emerald-400">
+                    {profile.startingLevel === 'zero'
+                      ? '0% (Fresh)'
+                      : profile.startingLevel === 'basics'
+                      ? '25%'
+                      : 'Custom'}
+                  </strong>
+                </div>
+                <div>
+                  Goal: <strong className="text-zinc-200">{profile.targetScore}/{profile.maxExamMarks}</strong>
+                </div>
               </div>
             </div>
 
-            {/* Extraction Progress Box (if in step 3) */}
+            {/* Extraction Progress Box */}
             {isExtracting && (
               <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/30 space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2 font-medium text-indigo-300">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    Agent Extraction Pipeline Running
+                    Building Your Personalized Study Plan...
                   </span>
                   <span className="font-mono text-indigo-200">{extractionProgress}%</span>
                 </div>
@@ -476,23 +822,22 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
               </div>
             )}
 
-            {/* Primary Action Button */}
-            <div className="pt-2 flex justify-end">
+            {/* Submit & Build Study Plan Button */}
+            <div className="pt-1 flex justify-end">
               <button
                 type="button"
-                disabled={isExtracting || files.length === 0}
+                disabled={isExtracting}
                 onClick={handleStartExtraction}
-                className="w-full sm:w-auto px-6 py-3 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
+                className="w-full px-6 py-3 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
               >
                 {isExtracting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Processing Syllabus & Past Papers...
+                    Generating Syllabus &amp; Schedule...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
-                    Ingest & Extract Curriculum (24 PYQs)
+                    <span>Save Preferences &amp; Generate Study Plan</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
