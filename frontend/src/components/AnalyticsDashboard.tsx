@@ -1,66 +1,104 @@
 import React from 'react';
 import { 
-  BarChart3, 
-  TrendingUp, 
   Clock, 
-  Target, 
   AlertTriangle, 
-  CheckCircle2, 
   ArrowRight, 
-  Sparkles, 
   Terminal, 
-  ShieldCheck, 
-  BookOpen, 
-  Flame,
-  Activity,
-  Layers
+  Layers,
+  FileCheck
 } from 'lucide-react';
-import { Unit, StudentProfile, Topic, LangGraphTraceNode } from '../types';
+import { Unit, StudentProfile, DaySchedule, LangGraphTraceNode } from '../types';
 
 interface AnalyticsDashboardProps {
   units: Unit[];
+  scheduleDays: DaySchedule[];
   profile: StudentProfile;
   traceNodes: LangGraphTraceNode[];
   onSelectTopicForStudy: (topicId: string) => void;
   onOpenTraces: () => void;
   onOpenTimetable: () => void;
+  onGoToSetup: () => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   units,
+  scheduleDays,
   profile,
   traceNodes,
   onSelectTopicForStudy,
   onOpenTraces,
   onOpenTimetable,
+  onGoToSetup,
 }) => {
+  // If user hasn't completed setup yet, show a clean zero-state prompt
+  if (!profile.isSetupComplete || units.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto my-12 border border-[#27272a] rounded-xl bg-[#18181b] p-8 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+          <FileCheck className="w-6 h-6" />
+        </div>
+        <h1 className="text-lg font-bold text-zinc-100">
+          No Course Configured Yet (Starting from 0)
+        </h1>
+        <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+          To view your progress and unit breakdown, first enter your course details, exam date, daily study hours, and upload your syllabus or past papers in Step 1.
+        </p>
+        <button
+          onClick={onGoToSetup}
+          className="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors inline-flex items-center gap-2 cursor-pointer"
+        >
+          <span>Go to Step 1: Course Setup &amp; Upload</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
   const allTopics = units.flatMap((u) => u.topics);
   const weakTopics = allTopics.filter((t) => t.masteryPercentage < 50);
 
-  // Compute aggregate weighted mastery
+  // Compute aggregate mastery (starts at 0% if user selected "Starting from 0")
   const totalMasterySum = allTopics.reduce((acc, t) => acc + t.masteryPercentage, 0);
   const avgMastery = Math.round(totalMasterySum / (allTopics.length || 1));
 
-  // Trajectory calculation based on current pace
-  const predictedLow = Math.max(50, Math.round(avgMastery * 1.05));
-  const predictedHigh = Math.min(95, Math.round(avgMastery * 1.15));
+  // Calculate real completed and planned hours from scheduleDays
+  const totalPlannedMinutes = scheduleDays.reduce((acc, d) => acc + d.totalMinutes, 0);
+  const totalCompletedMinutes = scheduleDays.reduce(
+    (acc, d) =>
+      acc +
+      d.sessions
+        .filter((s) => s.completed)
+        .reduce((sAcc, s) => sAcc + s.durationMinutes, 0),
+    0
+  );
+  const completedHours = (totalCompletedMinutes / 60).toFixed(1);
+  const plannedHours = (totalPlannedMinutes / 60).toFixed(1);
+  const hoursProgressPct =
+    totalPlannedMinutes > 0
+      ? Math.min(100, Math.round((totalCompletedMinutes / totalPlannedMinutes) * 100))
+      : 0;
+
+  // Estimated score based on current mastery out of user's configured maxExamMarks
+  const estimatedScore = Math.round((avgMastery / 100) * profile.maxExamMarks);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      {/* Top Welcome & Subject Banner */}
+      {/* Top Banner with User's Actual Course & Subject */}
       <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              RGPV B.Tech CSE IV Sem
+              {profile.university} • {profile.program} {profile.semester}
             </span>
-            <span className="text-xs font-mono text-zinc-400">CS-403 DBMS Examination</span>
+            <span className="text-xs font-mono text-zinc-400">
+              {profile.subjectCode} — {profile.subjectName}
+            </span>
           </div>
           <h1 className="text-xl font-bold text-zinc-100">
-            Exam Readiness & Adaptive Learning Analytics
+            {profile.studentName ? `${profile.studentName}'s Study Progress` : 'Study Progress & Unit Overview'}
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Real-time mastery tracking powered by deterministic priority scheduling and verified rubric assessments.
+            Track your topic mastery, completed study sessions, and weak areas before your exam.
           </p>
         </div>
 
@@ -69,29 +107,31 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             onClick={onOpenTimetable}
             className="px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 border border-zinc-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <span>View 14-Day Plan</span>
+            <span>Open {scheduleDays.length}-Day Schedule</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Top Row KPI Cards (3 Cards) */}
+      {/* Top Row KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* KPI 1: Overall Exam Readiness Radial Progress */}
+        {/* KPI 1: Current Mastery */}
         <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider block">
-              Overall Exam Readiness
+              Current Subject Mastery
             </span>
             <div className="text-2xl font-bold font-mono text-white">
-              {avgMastery}% <span className="text-xs text-emerald-400 font-sans font-normal">Ready</span>
+              {avgMastery}%{' '}
+              <span className="text-xs text-zinc-400 font-sans font-normal">
+                {avgMastery === 0 ? '(Just Started)' : 'Covered'}
+              </span>
             </div>
             <p className="text-[11px] text-zinc-500">
-              Across all 5 syllabus units & 24 past questions
+              Across {units.length} units &amp; {allTopics.length} topics
             </p>
           </div>
 
-          {/* Circular Visual Ring */}
           <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
               <path
@@ -102,7 +142,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
               <path
-                className="text-indigo-500 transition-all duration-1000 ease-out"
+                className="text-indigo-500 transition-all duration-700 ease-out"
                 strokeDasharray={`${avgMastery}, 100`}
                 strokeWidth="3.5"
                 strokeLinecap="round"
@@ -117,74 +157,86 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
         </div>
 
-        {/* KPI 2: Target Score vs Predicted Range */}
+        {/* KPI 2: Target Score vs Current Readiness */}
         <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono text-zinc-400 uppercase tracking-wider">
-              Target vs Trajectory
+              Target Marks Goal
             </span>
-            <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono text-[10px] border border-emerald-500/20">
-              On Track
+            <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[10px] border border-zinc-700">
+              Max: {profile.maxExamMarks}M
             </span>
           </div>
           <div className="text-2xl font-bold font-mono text-white">
-            {predictedLow}–{predictedHigh}%
+            {profile.targetScore} / {profile.maxExamMarks} Marks
           </div>
           <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono pt-1">
-            <span>Target Goal: <strong className="text-zinc-200">{profile.targetScore}%</strong></span>
-            <span className="text-emerald-400">Delta: +{predictedHigh - profile.targetScore}%</span>
+            <span>
+              Current Readiness:{' '}
+              <strong className="text-zinc-200">
+                ~{estimatedScore}/{profile.maxExamMarks}
+              </strong>
+            </span>
+            <span className="text-indigo-400">
+              Gap: {Math.max(0, profile.targetScore - estimatedScore)}M
+            </span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
             <div
               className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full"
-              style={{ width: `${(predictedHigh / 100) * 100}%` }}
+              style={{
+                width: `${Math.min(100, Math.round((estimatedScore / (profile.maxExamMarks || 70)) * 100))}%`,
+              }}
             />
           </div>
         </div>
 
-        {/* KPI 3: Exam Countdown Timer Card */}
+        {/* KPI 3: Exam Countdown & Completed Hours */}
         <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono text-zinc-400 uppercase tracking-wider">
-              Exam Countdown
+              Exam Timeline &amp; Hours
             </span>
             <Clock className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-2xl font-bold font-mono text-amber-300">
-            12 Days Remaining
+            {profile.daysRemaining} {profile.daysRemaining === 1 ? 'Day' : 'Days'} Left
           </div>
           <div className="flex items-center justify-between text-[11px] text-zinc-400 font-mono pt-1">
-            <span>Completed: <strong className="text-zinc-200">2.4 hrs</strong></span>
-            <span>Planned: 32.5 hrs</span>
+            <span>
+              Studied: <strong className="text-zinc-200">{completedHours} hrs</strong>
+            </span>
+            <span>Planned: {plannedHours} hrs</span>
           </div>
           <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
             <div
               className="h-full bg-amber-400 rounded-full"
-              style={{ width: `18%` }}
+              style={{ width: `${hoursProgressPct}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Middle Section: Unit-wise Breakdown & Weak Topics Watchlist */}
+      {/* Middle Section: Unit-wise Breakdown & Topics to Study */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Unit-wise Mastery Bar Breakdown (7 cols) */}
+        {/* Left: Unit-wise Mastery Breakdown */}
         <div className="lg:col-span-7 border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-5">
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-400" />
               <h2 className="text-sm font-semibold text-zinc-100">
-                Unit-Wise Mastery Breakdown
+                Unit-Wise Progress
               </h2>
             </div>
-            <span className="text-xs font-mono text-zinc-500">5 Exam Units</span>
+            <span className="text-xs font-mono text-zinc-500">{units.length} Units</span>
           </div>
 
           <div className="space-y-4">
             {units.map((unit) => {
               const unitTopics = unit.topics;
               const unitAvg = Math.round(
-                unitTopics.reduce((acc, t) => acc + t.masteryPercentage, 0) / (unitTopics.length || 1)
+                unitTopics.reduce((acc, t) => acc + t.masteryPercentage, 0) /
+                  (unitTopics.length || 1)
               );
 
               return (
@@ -217,8 +269,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   </div>
 
                   <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
-                    <span>{unitTopics.length} Core Topics</span>
-                    <span>Exam Quota: ~{unit.weightMarks} Marks</span>
+                    <span>{unitTopics.length} Topics</span>
+                    <span>Weightage: ~{unit.weightMarks} Marks</span>
                   </div>
                 </div>
               );
@@ -226,25 +278,25 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right: Weak Topics Watchlist (5 cols) */}
+        {/* Right: Priority Topics to Study Next */}
         <div className="lg:col-span-5 border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-400" />
+              <AlertTriangle className="w-4 h-4 text-amber-400" />
               <h2 className="text-sm font-semibold text-zinc-100">
-                Weak Topics Remediation Watchlist
+                Topics Needing Study (&lt;50% Mastery)
               </h2>
             </div>
-            <span className="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-              {weakTopics.length} Deficits (&lt;50%)
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+              {weakTopics.length} Topics
             </span>
           </div>
 
           <p className="text-xs text-zinc-400">
-            These high-frequency syllabus topics exhibit a dangerous mastery gap. Click "Revise Now" to jump into targeted practice.
+            Topics ordered by past exam frequency. Click &ldquo;Start Studying&rdquo; to read notes and take a practice quiz.
           </p>
 
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
             {weakTopics.map((topic) => (
               <div
                 key={topic.id}
@@ -256,28 +308,28 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                       {topic.title}
                     </h3>
                     <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 mt-0.5">
-                      <span>Appeared {topic.appearancesCount}× in PYQs</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="text-amber-400">{topic.totalMarksInPast5Years} Marks</span>
+                      <span>Asked {topic.appearancesCount}× in PYQs</span>
+                      <span>·</span>
+                      <span className="text-amber-400">{topic.totalMarksInPast5Years} Marks total</span>
                     </div>
                   </div>
 
                   <button
                     onClick={() => onSelectTopicForStudy(topic.id)}
-                    className="px-2.5 py-1 rounded-md bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-medium transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
                   >
-                    <span>Revise Now</span>
+                    <span>Study</span>
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] font-mono">
                   <span className="text-zinc-500">Current Mastery:</span>
-                  <span className="text-rose-400 font-semibold">{topic.masteryPercentage}%</span>
+                  <span className="text-zinc-300 font-semibold">{topic.masteryPercentage}%</span>
                 </div>
                 <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                   <div
-                    className="h-full bg-rose-500 rounded-full"
+                    className="h-full bg-indigo-500 rounded-full"
                     style={{ width: `${topic.masteryPercentage}%` }}
                   />
                 </div>
@@ -287,51 +339,26 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         </div>
       </div>
 
-      {/* Bottom Section: Execution Tracing & Telemetry Overview Card */}
-      <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-indigo-400" />
-            <h2 className="text-sm font-semibold text-zinc-100">
-              LangGraph Agent Pipeline Execution Health & Latency
-            </h2>
-          </div>
-          <button
-            onClick={onOpenTraces}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-mono flex items-center gap-1 cursor-pointer"
-          >
-            <span>Open Detailed Execution Trace Modal</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {traceNodes.map((node) => (
-            <div
-              key={node.id}
-              className="p-3 rounded-lg bg-[#121214] border border-[#27272a] space-y-1 text-xs"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-zinc-500 truncate">
-                  {node.nodeName.split(' ')[0]}
-                </span>
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              </div>
-              <div className="font-mono font-bold text-zinc-200">
-                {node.latencyMs}ms
-              </div>
-              <div className="text-[10px] text-zinc-500 font-mono">
-                {node.confidenceScore}% conf
-              </div>
+      {/* Bottom Section: Pipeline Processing Summary */}
+      {traceNodes.length > 0 && (
+        <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-indigo-400" />
+              <h2 className="text-xs font-semibold text-zinc-200">
+                Pipeline Processing Steps
+              </h2>
             </div>
-          ))}
+            <button
+              onClick={onOpenTraces}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-mono flex items-center gap-1 cursor-pointer"
+            >
+              <span>Inspect Step Logs</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
         </div>
-
-        <div className="flex items-center justify-between text-xs text-zinc-500 font-mono pt-1">
-          <span>Dual-pass verifier invariant status: <strong className="text-emerald-400">PASSED (0 Hallucinations)</strong></span>
-          <span>Deterministic linear optimizer status: <strong className="text-emerald-400">ACTIVE</strong></span>
-        </div>
-      </div>
+      )}
     </div>
   );
 };
