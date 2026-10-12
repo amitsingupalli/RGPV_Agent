@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-rgpv_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rgpv_prod_net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      DEBUG: "false"
+    volumes:
+      - ./data:/app/data:ro
+      - uploads_prod:/app/uploads
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
+    networks:
+      - rgpv_prod_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - rgpv_prod_net
+
+volumes:
+  pgdata_prod:
+  uploads_prod:
+
+networks:
+  rgpv_prod_net:
+    driver: bridge

@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - rgpv_network
 
   backend:
     build:
@@ -30,11 +32,37 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@postgres:5432/rgpv_agent
       POSTGRES_SYNC_URL: postgresql://postgres:postgrespassword@postgres:5432/rgpv_agent
       ENV: production
+      DEBUG: "false"
     ports:
       - "8000:8000"
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rgpv_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rgpv_agent_ui
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - rgpv_network
 
 volumes:
   pgdata:
+
+networks:
+  rgpv_network:
+    driver: bridge
