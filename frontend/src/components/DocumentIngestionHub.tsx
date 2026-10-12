@@ -160,11 +160,7 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
       return;
     }
     if (!profile.subjectCode.trim() || !profile.subjectName.trim()) {
-      setValidationError('Please enter your Subject Code and Subject Name.');
-      return;
-    }
-    if (files.length === 0) {
-      setValidationError('Please upload at least one Syllabus or PYQ file (or click "Load Sample CS-501 Data" to test).');
+      setValidationError('Please select your Subject from the dropdown before continuing.');
       return;
     }
 
@@ -173,7 +169,11 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
     const totalPages = files.reduce((acc, f) => acc + f.pages, 0);
 
     setExtractionProgress(15);
-    setExtractionStageText(`Reading ${files.length} document(s) (${totalPages} pages)...`);
+    setExtractionStageText(
+      files.length > 0
+        ? `Reading ${files.length} uploaded document(s) (${totalPages} pages)...`
+        : `Loading built-in RGPV syllabus & past papers for ${profile.subjectCode} (${profile.subjectName})...`
+    );
 
     setTimeout(() => {
       setExtractionProgress(45);
@@ -648,17 +648,19 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
               <div className="flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-indigo-400" />
                 <h2 className="text-sm font-semibold text-zinc-100">
-                  3. Upload Syllabus, PYQ Papers &amp; Notes
+                  3. Upload Extra Notes or PYQ PDFs (Optional)
                 </h2>
               </div>
               <span className="text-xs font-mono text-zinc-400">
-                {files.length} {files.length === 1 ? 'File' : 'Files'} Uploaded
+                {files.length === 0
+                  ? 'Using Built-in RGPV Catalog'
+                  : `${files.length} ${files.length === 1 ? 'File' : 'Files'} Uploaded`}
               </span>
             </div>
 
             {/* Category selector before picking file */}
             <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-zinc-400">Document Type to Upload:</span>
+              <span className="text-zinc-400">Optional Document Type:</span>
               <div className="flex items-center gap-1.5">
                 {(['Syllabus', 'PYQ', 'Notes'] as const).map((cat) => (
                   <button
@@ -698,10 +700,10 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-zinc-200">
-                    Click to select {uploadCategory} PDF or Text files from your computer
+                    Have your own PDFs or class notes? Click to upload (Optional)
                   </p>
                   <p className="text-[11px] text-zinc-500 mt-1">
-                    Supports university syllabus PDFs, past question papers (PYQs), and class notes.
+                    If you don&apos;t have any files to upload, you can skip this step—we automatically use the built-in RGPV syllabus and past papers for your selected subject.
                   </p>
                 </div>
 
@@ -715,7 +717,7 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                     }}
                     className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 transition-colors border border-zinc-700 cursor-pointer"
                   >
-                    Choose Syllabus File
+                    + Upload Syllabus PDF
                   </button>
                   <button
                     type="button"
@@ -726,36 +728,40 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                     }}
                     className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-xs text-indigo-300 transition-colors border border-indigo-500/30 font-medium cursor-pointer"
                   >
-                    Choose PYQ Paper
+                    + Upload PYQ Paper
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Uploaded Files List (Starts at 0 for a new user) */}
+            {/* Uploaded Files List or Built-In Fallback Notice */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>Uploaded Documents</span>
+                <span> Study Material Source</span>
                 {files.length > 0 && (
                   <button
                     type="button"
                     onClick={() => onUpdateFiles([])}
                     className="text-[11px] text-zinc-500 hover:text-rose-400 cursor-pointer"
                   >
-                    Clear All
+                    Clear Uploaded Files
                   </button>
                 )}
               </div>
 
               {files.length === 0 ? (
-                <div className="p-6 rounded-xl bg-[#121214] border border-zinc-800/80 text-center space-y-2">
-                  <BookOpen className="w-5 h-5 text-zinc-600 mx-auto" />
-                  <p className="text-xs text-zinc-400 font-medium">
-                    No documents uploaded yet (Starting from 0)
-                  </p>
-                  <p className="text-[11px] text-zinc-500">
-                    Upload your PDF files above, or click &ldquo;Quick-Fill Sample CS-501 Data&rdquo; at the top right to try with sample RGPV DBMS papers.
-                  </p>
+                <div className="p-4 rounded-xl bg-emerald-950/15 border border-emerald-500/25 flex items-start gap-3 text-xs">
+                  <BookOpen className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-zinc-200 font-medium">
+                      No files uploaded — Using Built-in RGPV Curriculum
+                    </p>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      {profile.subjectCode
+                        ? `We will automatically load the 5-Unit RGPV Syllabus and Past Year Questions for ${profile.subjectCode} (${profile.subjectName}).`
+                        : 'Select your Semester, Branch, and Subject on the left, then click "Save Preferences & Generate Study Plan" below—no file upload required!'}
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">
