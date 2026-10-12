@@ -19,6 +19,7 @@ import { Navbar } from './components/Navbar';
 import { DocumentIngestionHub } from './components/DocumentIngestionHub';
 import { SyllabusExplorer } from './components/SyllabusExplorer';
 import { StudyTimetable } from './components/StudyTimetable';
+import { TopicLearningView } from './components/TopicLearningView';
 import { ActiveStudyRoom } from './components/ActiveStudyRoom';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { TopicExplainerDrawer } from './components/TopicExplainerDrawer';
@@ -353,10 +354,10 @@ export default function App() {
     }));
   };
 
-  // Open study room for specific topic
+  // Open Learn Topic step for specific topic first before Study Room practice
   const handleSelectTopicForStudy = (topicId: string) => {
     setSelectedTopicId(topicId);
-    setCurrentTab('studyroom');
+    setCurrentTab('learn');
   };
 
   // Open citation modal
@@ -437,6 +438,19 @@ export default function App() {
             }
             onSelectSessionForStudy={(topicId) => handleSelectTopicForStudy(topicId)}
             onToggleSessionComplete={handleToggleSessionComplete}
+            onGoToSetup={() => setCurrentTab('ingestion')}
+          />
+        )}
+
+        {currentTab === 'learn' && (
+          <TopicLearningView
+            currentTopic={currentTopic}
+            allUnits={units}
+            language={profile.language}
+            onLanguageChange={handleLanguageChange}
+            onSelectTopic={(id) => setSelectedTopicId(id)}
+            onOpenCitation={handleOpenCitation}
+            onProceedToPractice={() => setCurrentTab('studyroom')}
             onGoToSetup={() => setCurrentTab('ingestion')}
           />
         )}

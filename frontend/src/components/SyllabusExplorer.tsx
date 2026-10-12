@@ -270,7 +270,7 @@ export const SyllabusExplorer: React.FC<SyllabusExplorerProps> = ({
                               onClick={() => onSelectTopicForStudy(topic.id)}
                               className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
                             >
-                              <span>Study This Topic</span>
+                              <span>Learn Topic</span>
                               <ArrowUpRight className="w-3.5 h-3.5" />
                             </button>
                           </div>

@@ -5,7 +5,8 @@ import {
   Layers, 
   BarChart3, 
   FileCheck,
-  RotateCcw
+  RotateCcw,
+  GraduationCap
 } from 'lucide-react';
 import { Language, StudentProfile } from '../types';
 
@@ -31,8 +32,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'ingestion', label: '1. Setup', icon: FileCheck, badge: !profile.isSetupComplete ? 'Start' : undefined },
     { id: 'syllabus', label: '2. Syllabus', icon: Layers },
     { id: 'timetable', label: '3. Study Plan', icon: Calendar, badge: profile.isSetupComplete && !profile.planApproved ? 'Review' : undefined },
-    { id: 'studyroom', label: '4. Study Room', icon: BookMarked },
-    { id: 'dashboard', label: '5. Progress', icon: BarChart3 },
+    { id: 'learn', label: '4. Learn Topic', icon: GraduationCap },
+    { id: 'studyroom', label: '5. Study Room', icon: BookMarked },
+    { id: 'dashboard', label: '6. Progress', icon: BarChart3 },
   ];
 
   return (
