@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { 
   initialStudentProfile, 
-  curriculumUnits, 
-  pyqQuestions, 
   traceNodes 
 } from './data/mockData';
+import { getCurriculumForSubject } from './data/subjectCurriculumEngine';
 import { 
   StudentProfile, 
   Unit, 
@@ -177,8 +176,8 @@ export default function App() {
   const [pyqs, setPyqs] = useState<PYQQuestion[]>([]);
   const [scheduleDays, setScheduleDays] = useState<DaySchedule[]>([]);
 
-  // Active topic for Study Room
-  const [selectedTopicId, setSelectedTopicId] = useState<string>('topic-3-1');
+  // Active topic for Learn Topic & Study Room
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('topic-1-1');
 
   // Modal / Drawer states
   const [selectedCitation, setSelectedCitation] = useState<any | null>(null);
@@ -192,9 +191,35 @@ export default function App() {
   const allTopics = units.flatMap((u) => u.topics);
   const currentTopic = allTopics.find((t) => t.id === selectedTopicId) || allTopics[0] || null;
 
-  // Update student profile
+  // Update student profile (and if subject changes after setup, dynamically reload curriculum for the new subject!)
   const handleUpdateProfile = (updates: Partial<StudentProfile>) => {
-    setProfile((prev) => ({ ...prev, ...updates }));
+    setProfile((prev) => {
+      const next = { ...prev, ...updates };
+      if (
+        next.isSetupComplete &&
+        next.subjectCode &&
+        (updates.subjectCode !== undefined || updates.subjectName !== undefined) &&
+        updates.subjectCode !== prev.subjectCode
+      ) {
+        const { units: subjectUnits, pyqs: subjectPyqs } = getCurriculumForSubject(
+          next.subjectCode,
+          next.subjectName
+        );
+        const baseline =
+          next.startingLevel === 'zero' ? 0 : next.startingLevel === 'basics' ? 25 : 0;
+        const initialized = subjectUnits.map((u) => ({
+          ...u,
+          topics: u.topics.map((t) => ({ ...t, masteryPercentage: baseline })),
+        }));
+        setUnits(initialized);
+        setPyqs(subjectPyqs);
+        setScheduleDays(generateUserSchedule(initialized, next));
+        if (initialized[0]?.topics[0]) {
+          setSelectedTopicId(initialized[0].topics[0].id);
+        }
+      }
+      return next;
+    });
   };
 
   // Language toggle
@@ -202,12 +227,17 @@ export default function App() {
     setProfile((prev) => ({ ...prev, language: lang }));
   };
 
-  // Complete initial setup from DocumentIngestionHub
+  // Complete initial setup from DocumentIngestionHub using the exact selected subject's curriculum
   const handleCompleteIngestion = (
     customUnitMastery?: Record<string, number>
   ) => {
+    const { units: subjectUnits, pyqs: subjectPyqs } = getCurriculumForSubject(
+      profile.subjectCode,
+      profile.subjectName
+    );
+
     // Initialize units with user's chosen starting level (default 0% when starting from 0)
-    const initializedUnits: Unit[] = curriculumUnits.map((unit) => {
+    const initializedUnits: Unit[] = subjectUnits.map((unit) => {
       const unitBaseline =
         profile.startingLevel === 'zero'
           ? 0
@@ -229,13 +259,13 @@ export default function App() {
       isSetupComplete: true,
       planApproved: false,
       hitlInterruptActive: true,
-      hitlInterruptReason: 'Review your extracted syllabus topics and approve your study schedule',
+      hitlInterruptReason: `Review your extracted ${profile.subjectCode} (${profile.subjectName}) syllabus topics and approve your study schedule`,
     };
 
     const generatedDays = generateUserSchedule(initializedUnits, updatedProfile);
 
     setUnits(initializedUnits);
-    setPyqs(pyqQuestions);
+    setPyqs(subjectPyqs);
     setProfile(updatedProfile);
     setScheduleDays(generatedDays);
     if (initializedUnits[0]?.topics[0]) {

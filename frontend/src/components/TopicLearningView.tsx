@@ -181,30 +181,91 @@ function getTopicDiagramAndGuide(topic: Topic): DiagramBlueprint {
     };
   }
 
-  // Default: B+ Tree / Indexing / Storage / General Engineering Topic
+  if (titleLower.includes('b+ tree') || titleLower.includes('b-tree') || titleLower.includes('raid')) {
+    return {
+      title: 'B+ Tree Multi-Level Index & Leaf Linked-List Architecture',
+      caption: 'Internal routing nodes and doubly-linked leaf nodes pointing to disk data blocks',
+      examDrawingTip:
+        'Clearly distinguish Internal Nodes (routing keys only, no data pointers) from Leaf Nodes (contain all keys + data pointers + horizontal NextLeaf arrows).',
+      referenceUrl: 'https://en.wikipedia.org/wiki/B%2B_tree',
+      referenceLabel: 'B+ Tree & Indexing Architecture Reference',
+      nodes: [
+        { step: 'Root Node', label: '[ 25 | 50 ]', sub: 'Top-level routing keys (Max m-1 keys)' },
+        { step: 'Internal Nodes', label: '[ 10 | 20 ]   [ 30 | 40 ]   [ 60 | 75 ]', sub: 'Guides search in O(log_m N) disk I/Os' },
+        { step: 'Leaf Nodes', label: '[10|15|20] ⇄ [25|30|40] ⇄ [50|60|75]', sub: 'Linked sequentially for fast range queries' },
+        { step: 'Data Blocks', label: '↓ Disk Record Pointers ↓', sub: 'Actual tuple blocks on secondary storage' },
+      ],
+      doList: [
+        'Draw horizontal arrows (⇄) connecting all Leaf Nodes in your B+ Tree diagram to highlight range-query efficiency.',
+        'Write a clear comparison table between B-Tree and B+ Tree (data pointers at all nodes vs leaf nodes only).',
+        'State the node capacity formulas for order m: max children = m, min children = ⌈m/2⌉, max keys = m - 1.',
+        'Show intermediate tree steps when inserting keys that cause a leaf split.',
+      ],
+      dontList: [
+        'Do NOT omit the sequential linked-list arrows between leaf nodes in a B+ Tree diagram.',
+        'Do NOT delete a key from an internal node without redistributing or merging underfull nodes.',
+        'Do NOT confuse RAID 0 (striping only, zero fault tolerance) with RAID 1 (mirroring) or RAID 5 (distributed parity).',
+      ],
+    };
+  }
+
+  // Dynamic Subject-Aware Diagram & Exam Sheet Guide for ANY selected subject/topic (BT-101..BT-105, Physics, Math, BEEE, Graphics, DSA, OS, ADA, TOC, CN, ML, ECE, etc.)
+  const snippetLines = (topic.pedagogicalContent.workedExample.stepByStepSolution[0]?.codeSnippet || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const dynamicNodes: Array<{ step: string; label: string; sub: string }> =
+    topic.pedagogicalContent.workedExample.stepByStepSolution.length >= 2
+      ? topic.pedagogicalContent.workedExample.stepByStepSolution.map((s, idx) => ({
+          step: `Stage ${idx + 1}`,
+          label: s.title,
+          sub: (s.codeSnippet || s.content).split('\n')[0].slice(0, 68),
+        }))
+      : [
+          {
+            step: '1. Principle / Input',
+            label: topic.title.split('&')[0].trim(),
+            sub: 'State formal law, assumptions, or system inputs',
+          },
+          {
+            step: '2. Core Architecture',
+            label: snippetLines[0] ? snippetLines[0].slice(0, 48) : 'Labeled Block / Circuit / Setup Diagram',
+            sub: 'Draw neat schematic with arrows & parameter labels',
+          },
+          {
+            step: '3. Governing Equation',
+            label: snippetLines[1] ? snippetLines[1].slice(0, 48) : 'Step-by-Step Mathematical / Logical Derivation',
+            sub: topic.pedagogicalContent.examPattern.gradingRubricHighlight.slice(0, 65),
+          },
+          {
+            step: '4. Verified Output',
+            label: 'Final Boxed Formula / Numerical Result',
+            sub: 'Include SI units, boundary checks, and conclusion',
+          },
+        ];
+
+  const searchSlug = encodeURIComponent(topic.title.replace(/[^a-zA-Z0-9\s]/g, ' ').trim());
+
   return {
-    title: 'B+ Tree Multi-Level Index & Leaf Linked-List Architecture',
-    caption: 'Internal routing nodes and doubly-linked leaf nodes pointing to disk data blocks',
-    examDrawingTip:
-      'Clearly distinguish Internal Nodes (routing keys only, no data pointers) from Leaf Nodes (contain all keys + data pointers + horizontal NextLeaf arrows).',
-    referenceUrl: 'https://en.wikipedia.org/wiki/B%2B_tree',
-    referenceLabel: 'B+ Tree & Indexing Architecture Reference',
-    nodes: [
-      { step: 'Root Node', label: '[ 25 | 50 ]', sub: 'Top-level routing keys (Max m-1 keys)' },
-      { step: 'Internal Nodes', label: '[ 10 | 20 ]   [ 30 | 40 ]   [ 60 | 75 ]', sub: 'Guides search in O(log_m N) disk I/Os' },
-      { step: 'Leaf Nodes', label: '[10|15|20] ⇄ [25|30|40] ⇄ [50|60|75]', sub: 'Linked sequentially for fast range queries' },
-      { step: 'Data Blocks', label: '↓ Disk Record Pointers ↓', sub: 'Actual tuple blocks on secondary storage' },
-    ],
+    title: `${topic.title} — Exam Diagram & Stepwise Flow`,
+    caption: `Required schematic & derivation flow for ${topic.pedagogicalContent.examPattern.standardMarks}-mark university questions`,
+    examDrawingTip: `Rubric Distribution: ${topic.pedagogicalContent.examPattern.gradingRubricHighlight}. Always enclose your diagram and final formula inside a neat rectangular box with clear labels.`,
+    referenceUrl: `https://en.wikipedia.org/w/index.php?search=${searchSlug}`,
+    referenceLabel: `Reference Diagram & Notes for ${topic.title}`,
+    nodes: dynamicNodes,
     doList: [
-      'Draw horizontal arrows (⇄) connecting all Leaf Nodes in your B+ Tree diagram to highlight range-query efficiency.',
-      'Write a clear comparison table between B-Tree and B+ Tree (data pointers at all nodes vs leaf nodes only).',
-      'State the node capacity formulas for order m: max children = m, min children = ⌈m/2⌉, max keys = m - 1.',
-      'Show intermediate tree steps when inserting keys that cause a leaf split.',
+      `Follow the exact rubric breakdown: ${topic.pedagogicalContent.examPattern.gradingRubricHighlight}`,
+      `Begin with a crisp 3-line formal definition of ${topic.title} and underline the key technical terms.`,
+      'Draw the labeled block/circuit/schematic diagram or mathematical graph using a pencil before writing long paragraphs.',
+      'Highlight the final derived formula or numerical answer in a rectangular box with proper units.',
     ],
     dontList: [
-      'Do NOT omit the sequential linked-list arrows between leaf nodes in a B+ Tree diagram.',
-      'Do NOT delete a key from an internal node without redistributing or merging underfull nodes.',
-      'Do NOT confuse RAID 0 (striping only, zero fault tolerance) with RAID 1 (mirroring) or RAID 5 (distributed parity).',
+      ...topic.pedagogicalContent.commonMistakes.map(
+        (m) => `Do NOT make this mistake (${m.penalty}): ${m.mistake}. Instead: ${m.remedy}`
+      ),
+      'Do NOT write a wall of unbroken text without subheadings, equations, or a labeled diagram.',
+      'Do NOT skip intermediate substitution steps in numericals or derivations—step marks are awarded even if calculation has a minor slip.',
     ],
   };
 }

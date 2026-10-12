@@ -684,11 +684,11 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                 <button
                   type="button"
                   onClick={() =>
-                    handleInsertTemplate('Consider Relation R(A, B, C, D) with FDs:\n')
+                    handleInsertTemplate('Diagram / Flow Steps:\n1. \n2. \n3. \n\nGoverning Formula / Derivation:\n')
                   }
                   className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
                 >
-                  + Relation R(A,B,C)
+                  + Diagram &amp; Formula Steps
                 </button>
               </div>
 

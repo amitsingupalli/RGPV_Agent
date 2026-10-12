@@ -19,7 +19,7 @@ import {
   StudyTimeSlot, 
   StartingPreparationLevel 
 } from '../types';
-import { curriculumUnits } from '../data/mockData';
+import { getCurriculumForSubject } from '../data/subjectCurriculumEngine';
 import { getSubjectsForBranchAndSemester } from '../data/rgpvSubjectCatalog';
 
 interface DocumentIngestionHubProps {
@@ -607,9 +607,13 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
               {profile.startingLevel === 'custom' && (
                 <div className="p-3.5 rounded-lg bg-[#121214] border border-zinc-800 space-y-2.5 mt-2">
                   <span className="text-[11px] text-zinc-400 block">
-                    Rate your current confidence in each unit (0% = not started):
+                    Rate your current confidence in each unit of{' '}
+                    <strong className="text-zinc-200">
+                      {profile.subjectCode ? `${profile.subjectCode} (${profile.subjectName})` : 'your selected subject'}
+                    </strong>{' '}
+                    (0% = not started):
                   </span>
-                  {curriculumUnits.map((u) => (
+                  {getCurriculumForSubject(profile.subjectCode, profile.subjectName).units.map((u) => (
                     <div key={u.id} className="space-y-1">
                       <div className="flex justify-between text-[11px]">
                         <span className="text-zinc-300 truncate pr-2">
