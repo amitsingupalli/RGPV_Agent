@@ -320,12 +320,6 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                 <option value="CSE (Data Science)">
                   CSE (Data Science)
                 </option>
-                <option value="CSE (Cyber Security)">
-                  CSE (Cyber Security)
-                </option>
-                <option value="CSE (IoT & Cyber Security)">
-                  CSE (IoT &amp; Cyber Security)
-                </option>
                 <option value="Electronics & Communication Engineering (ECE)">
                   Electronics &amp; Communication Engineering (ECE)
                 </option>
