@@ -20,6 +20,7 @@ import {
   StartingPreparationLevel 
 } from '../types';
 import { curriculumUnits } from '../data/mockData';
+import { getSubjectsForBranchAndSemester } from '../data/rgpvSubjectCatalog';
 
 interface DocumentIngestionHubProps {
   profile: StudentProfile;
@@ -111,8 +112,8 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
       program: 'B.Tech',
       branch: 'Computer Science & Engineering (CSE)',
       semester: '5th Semester (V)',
-      subjectCode: 'CS-501',
-      subjectName: 'Database Management Systems (DBMS)',
+      subjectCode: 'CS-502',
+      subjectName: 'Database Management Systems',
       maxExamMarks: 70,
       targetScore: 55,
       dailyHoursCap: 2.5,
@@ -285,7 +286,15 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
                 </label>
                 <select
                   value={profile.semester}
-                  onChange={(e) => onUpdateProfile({ semester: e.target.value })}
+                  onChange={(e) => {
+                    const nextSem = e.target.value;
+                    const nextSubjects = getSubjectsForBranchAndSemester(profile.branch, nextSem);
+                    const stillValid = nextSubjects.some((s) => s.code === profile.subjectCode);
+                    onUpdateProfile({
+                      semester: nextSem,
+                      ...(stillValid ? {} : { subjectCode: '', subjectName: '' }),
+                    });
+                  }}
                   className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
                 >
                   <option value="">-- Select Semester --</option>
@@ -307,7 +316,15 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
               </label>
               <select
                 value={profile.branch}
-                onChange={(e) => onUpdateProfile({ branch: e.target.value })}
+                onChange={(e) => {
+                  const nextBranch = e.target.value;
+                  const nextSubjects = getSubjectsForBranchAndSemester(nextBranch, profile.semester);
+                  const stillValid = nextSubjects.some((s) => s.code === profile.subjectCode);
+                  onUpdateProfile({
+                    branch: nextBranch,
+                    ...(stillValid ? {} : { subjectCode: '', subjectName: '' }),
+                  });
+                }}
                 className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
               >
                 <option value="">-- Select Branch --</option>
@@ -326,32 +343,65 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Subject Code *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., CS-501"
-                  value={profile.subjectCode}
-                  onChange={(e) => onUpdateProfile({ subjectCode: e.target.value.toUpperCase() })}
-                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+            {/* Dynamic Subject Dropdown based on selected Branch & Semester */}
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">
+                Subject (Auto-loaded for Selected Semester &amp; Branch) *
+              </label>
+              {(() => {
+                const availableSubjects = getSubjectsForBranchAndSemester(
+                  profile.branch,
+                  profile.semester
+                );
+                const isReady = Boolean(profile.branch && profile.semester);
 
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Subject Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., Database Management Systems"
-                  value={profile.subjectName}
-                  onChange={(e) => onUpdateProfile({ subjectName: e.target.value })}
-                  className="w-full bg-[#121214] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+                return (
+                  <div className="space-y-2">
+                    <select
+                      disabled={!isReady}
+                      value={profile.subjectCode}
+                      onChange={(e) => {
+                        const selectedCode = e.target.value;
+                        const found = availableSubjects.find((s) => s.code === selectedCode);
+                        if (found) {
+                          onUpdateProfile({
+                            subjectCode: found.code,
+                            subjectName: found.name,
+                          });
+                        } else {
+                          onUpdateProfile({
+                            subjectCode: '',
+                            subjectName: '',
+                          });
+                        }
+                      }}
+                      className="w-full bg-[#121214] border border-[#27272a] disabled:opacity-50 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">
+                        {!isReady
+                          ? '-- Select Semester & Branch first --'
+                          : `-- Select Subject (${availableSubjects.length} subjects available) --`}
+                      </option>
+                      {availableSubjects.map((subj) => (
+                        <option key={subj.code} value={subj.code}>
+                          {subj.code} — {subj.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {profile.subjectCode && profile.subjectName && (
+                      <div className="px-3 py-2 rounded-lg bg-[#121214] border border-zinc-800/80 flex items-center justify-between text-xs">
+                        <span className="text-zinc-300 font-medium">
+                          {profile.subjectName}
+                        </span>
+                        <span className="font-mono text-indigo-400 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20">
+                          {profile.subjectCode}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
