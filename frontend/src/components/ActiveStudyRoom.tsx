@@ -17,10 +17,13 @@ import {
   FileCheck
 } from 'lucide-react';
 import { Topic, Language, Unit, QuizSubmission, RubricItem } from '../types';
+import { evaluateAnswerWithAI } from '../services/aiService';
 
 interface ActiveStudyRoomProps {
   currentTopic: Topic | null;
   allUnits: Unit[];
+  subjectCode?: string;
+  subjectName?: string;
   language: Language;
   onLanguageChange: (lang: Language) => void;
   onSelectTopic: (topicId: string) => void;
@@ -33,6 +36,8 @@ interface ActiveStudyRoomProps {
 export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
   currentTopic,
   allUnits,
+  subjectCode,
+  subjectName,
   language,
   onLanguageChange,
   onSelectTopic,
@@ -104,156 +109,77 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
     setStudentAnswerText((prev) => (prev ? prev + '\n\n' + snippet : snippet));
   };
 
-  // Evaluate what the student actually wrote against topic concepts & rubrics
-  const handleSubmitAnswer = () => {
+  // Evaluate what the student actually wrote using the live Gemini AI Examiner (with local fallback)
+  const handleSubmitAnswer = async () => {
     setIsVerifying(true);
+    const answerLower = studentAnswerText.toLowerCase();
 
-    setTimeout(() => {
+    // Check for adversarial prompt injection attempts
+    const injectionPatterns = [
+      'ignore previous',
+      'ignore all instructions',
+      'give full marks',
+      'award 100%',
+      'system prompt',
+    ];
+    const hasInjection = injectionPatterns.some((pat) => answerLower.includes(pat));
+
+    if (hasInjection) {
       setIsVerifying(false);
-      const answerLower = studentAnswerText.toLowerCase();
-
-      // Check for adversarial prompt injection attempts
-      const injectionPatterns = [
-        'ignore previous',
-        'ignore all instructions',
-        'give full marks',
-        'award 100%',
-        'system prompt',
-      ];
-      const hasInjection = injectionPatterns.some((pat) => answerLower.includes(pat));
-
-      if (hasInjection) {
-        setSubmission({
-          id: `sub-${Date.now()}`,
-          topicId: currentTopic.id,
-          questionText: activeQuestion,
-          questionType: 'Conceptual',
-          totalMarks,
-          studentAnswer: studentAnswerText,
-          submittedAt: 'Just now',
-          status: 'evaluated',
-          score: 0,
-          verifierShield: true,
-          rubrics: [
-            {
-              id: 'r-sec',
-              criterion: 'Valid academic response without grading manipulation instructions',
-              allocatedMarks: totalMarks,
-              awardedMarks: 0,
-              fulfilled: false,
-              examinerNote: 'Detected grading override instruction in answer text. Please write a genuine subject answer.',
-            },
-          ],
-          missingCriteria: ['Please remove instruction-override phrases and answer the question directly.'],
-          misconceptions: [],
-          masteryDelta: {
-            before: currentTopic.masteryPercentage,
-            after: currentTopic.masteryPercentage,
+      setSubmission({
+        id: `sub-${Date.now()}`,
+        topicId: currentTopic.id,
+        questionText: activeQuestion,
+        questionType: 'Conceptual',
+        totalMarks,
+        studentAnswer: studentAnswerText,
+        submittedAt: 'Just now',
+        status: 'evaluated',
+        score: 0,
+        verifierShield: true,
+        rubrics: [
+          {
+            id: 'r-sec',
+            criterion: 'Valid academic response without grading manipulation instructions',
+            allocatedMarks: totalMarks,
+            awardedMarks: 0,
+            fulfilled: false,
+            examinerNote: 'Detected grading override instruction in answer text. Please write a genuine subject answer.',
           },
-        });
-        return;
-      }
-
-      // Extract significant keywords from topic title and definition
-      const rawKeywords = `${currentTopic.title} ${content.coreDefinition.en}`
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, ' ')
-        .split(/\s+/)
-        .filter((w) => w.length >= 5);
-      const uniqueKeywords = Array.from(new Set(rawKeywords)).slice(0, 12);
-      const matchedKeywords = uniqueKeywords.filter((kw) => answerLower.includes(kw));
-      const keywordRatio =
-        uniqueKeywords.length > 0 ? matchedKeywords.length / uniqueKeywords.length : 0.5;
-
-      // Check structural elements
-      const hasDefinitionWords = wordCount >= 18 && keywordRatio >= 0.2;
-      const hasExampleOrSchema =
-        answerLower.includes('example') ||
-        answerLower.includes('consider') ||
-        answerLower.includes('select ') ||
-        answerLower.includes('->') ||
-        answerLower.includes('step') ||
-        answerLower.includes('table') ||
-        wordCount >= 45;
-      const hasDepth = wordCount >= 65 && keywordRatio >= 0.35;
-
-      const c1Alloc = Number((totalMarks * 0.3).toFixed(1));
-      const c2Alloc = Number((totalMarks * 0.4).toFixed(1));
-      const c3Alloc = Number((totalMarks - c1Alloc - c2Alloc).toFixed(1));
-
-      const c1Awarded = hasDefinitionWords
-        ? c1Alloc
-        : wordCount >= 8
-        ? Number((c1Alloc * 0.5).toFixed(1))
-        : 0;
-      const c2Awarded = hasExampleOrSchema
-        ? c2Alloc
-        : wordCount >= 25
-        ? Number((c2Alloc * 0.5).toFixed(1))
-        : 0;
-      const c3Awarded = hasDepth
-        ? c3Alloc
-        : wordCount >= 35
-        ? Number((c3Alloc * 0.5).toFixed(1))
-        : 0;
-
-      const totalAwarded = Number((c1Awarded + c2Awarded + c3Awarded).toFixed(1));
-      const scorePct = totalAwarded / totalMarks;
-
-      const rubrics: RubricItem[] = [
-        {
-          id: 'r-1',
-          criterion: `Core definition & key concepts of ${currentTopic.title}`,
-          allocatedMarks: c1Alloc,
-          awardedMarks: c1Awarded,
-          fulfilled: c1Awarded === c1Alloc,
-          examinerNote:
-            c1Awarded === c1Alloc
-              ? 'Covered core terminology clearly.'
-              : 'Include a clearer formal definition and key technical terms.',
+        ],
+        missingCriteria: ['Please remove instruction-override phrases and answer the question directly.'],
+        misconceptions: [],
+        masteryDelta: {
+          before: currentTopic.masteryPercentage,
+          after: currentTopic.masteryPercentage,
         },
-        {
-          id: 'r-2',
-          criterion: 'Worked example, diagram notation, or schema illustration',
-          allocatedMarks: c2Alloc,
-          awardedMarks: c2Awarded,
-          fulfilled: c2Awarded === c2Alloc,
-          examinerNote:
-            c2Awarded === c2Alloc
-              ? 'Included concrete example/notation.'
-              : 'Add a concrete example relation, diagram steps, or SQL/formula snippet.',
-        },
-        {
-          id: 'r-3',
-          criterion: 'Completeness & exam rubric points (' + content.examPattern.gradingRubricHighlight + ')',
-          allocatedMarks: c3Alloc,
-          awardedMarks: c3Awarded,
-          fulfilled: c3Awarded === c3Alloc,
-          examinerNote:
-            c3Awarded === c3Alloc
-              ? 'Addressed full university marking scheme.'
-              : 'Expand your explanation to cover all parts of the question.',
-        },
-      ];
+      });
+      return;
+    }
 
-      const missing: string[] = [];
-      if (!hasDefinitionWords) {
-        missing.push(`Define ${currentTopic.title} formally in your opening paragraph.`);
-      }
-      if (!hasExampleOrSchema) {
-        missing.push('Include a concrete example, table schema, or step-by-step derivation.');
-      }
-      if (!hasDepth) {
-        missing.push(`Cover all rubric points: ${content.examPattern.gradingRubricHighlight}`);
-      }
+    // Call live Gemini AI Examiner
+    const aiEvaluation = await evaluateAnswerWithAI({
+      subjectCode: subjectCode || 'RGPV',
+      subjectName: subjectName || 'Engineering Subject',
+      topicTitle: currentTopic.title,
+      questionText: activeQuestion,
+      totalMarks,
+      studentAnswer: studentAnswerText,
+      currentMastery: currentTopic.masteryPercentage,
+    });
 
+    setIsVerifying(false);
+
+    if (aiEvaluation) {
+      const clampedScore = Math.max(
+        0,
+        Math.min(totalMarks, Number(aiEvaluation.score) || 0)
+      );
+      const scorePct = clampedScore / totalMarks;
       const beforeMastery = currentTopic.masteryPercentage;
       const afterMastery = Math.max(
         0,
-        Math.min(
-          100,
-          Math.round(0.6 * (scorePct * 100) + 0.4 * beforeMastery)
-        )
+        Math.min(100, Math.round(0.6 * (scorePct * 100) + 0.4 * beforeMastery))
       );
       onUpdateTopicMastery(currentTopic.id, afterMastery);
 
@@ -264,22 +190,145 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
         questionType: 'Conceptual',
         totalMarks,
         studentAnswer: studentAnswerText,
-        submittedAt: 'Just now',
+        submittedAt: 'Just now • Graded by Gemini AI Examiner',
         status: 'evaluated',
-        score: totalAwarded,
+        score: clampedScore,
         verifierShield: true,
-        rubrics,
-        missingCriteria: missing,
-        misconceptions:
-          scorePct < 0.7 && content.commonMistakes[0]
-            ? [`Tip: Avoid "${content.commonMistakes[0].mistake}" — ${content.commonMistakes[0].remedy}`]
-            : [],
+        rubrics: aiEvaluation.rubrics,
+        missingCriteria: aiEvaluation.missingCriteria || [],
+        misconceptions: aiEvaluation.misconceptions || [],
         masteryDelta: {
           before: beforeMastery,
           after: afterMastery,
         },
       });
-    }, 600);
+      return;
+    }
+
+    // Offline Fallback Evaluation
+    const rawKeywords = `${currentTopic.title} ${content.coreDefinition.en}`
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 5);
+    const uniqueKeywords = Array.from(new Set(rawKeywords)).slice(0, 12);
+    const matchedKeywords = uniqueKeywords.filter((kw) => answerLower.includes(kw));
+    const keywordRatio =
+      uniqueKeywords.length > 0 ? matchedKeywords.length / uniqueKeywords.length : 0.5;
+
+    const hasDefinitionWords = wordCount >= 18 && keywordRatio >= 0.2;
+    const hasExampleOrSchema =
+      answerLower.includes('example') ||
+      answerLower.includes('consider') ||
+      answerLower.includes('select ') ||
+      answerLower.includes('->') ||
+      answerLower.includes('step') ||
+      answerLower.includes('table') ||
+      wordCount >= 45;
+    const hasDepth = wordCount >= 65 && keywordRatio >= 0.35;
+
+    const c1Alloc = Number((totalMarks * 0.3).toFixed(1));
+    const c2Alloc = Number((totalMarks * 0.4).toFixed(1));
+    const c3Alloc = Number((totalMarks - c1Alloc - c2Alloc).toFixed(1));
+
+    const c1Awarded = hasDefinitionWords
+      ? c1Alloc
+      : wordCount >= 8
+      ? Number((c1Alloc * 0.5).toFixed(1))
+      : 0;
+    const c2Awarded = hasExampleOrSchema
+      ? c2Alloc
+      : wordCount >= 25
+      ? Number((c2Alloc * 0.5).toFixed(1))
+      : 0;
+    const c3Awarded = hasDepth
+      ? c3Alloc
+      : wordCount >= 35
+      ? Number((c3Alloc * 0.5).toFixed(1))
+      : 0;
+
+    const totalAwarded = Number((c1Awarded + c2Awarded + c3Awarded).toFixed(1));
+    const scorePct = totalAwarded / totalMarks;
+
+    const rubrics: RubricItem[] = [
+      {
+        id: 'r-1',
+        criterion: `Core definition & key concepts of ${currentTopic.title}`,
+        allocatedMarks: c1Alloc,
+        awardedMarks: c1Awarded,
+        fulfilled: c1Awarded === c1Alloc,
+        examinerNote:
+          c1Awarded === c1Alloc
+            ? 'Covered core terminology clearly.'
+            : 'Include a clearer formal definition and key technical terms.',
+      },
+      {
+        id: 'r-2',
+        criterion: 'Worked example, diagram notation, or numerical illustration',
+        allocatedMarks: c2Alloc,
+        awardedMarks: c2Awarded,
+        fulfilled: c2Awarded === c2Alloc,
+        examinerNote:
+          c2Awarded === c2Alloc
+            ? 'Included concrete example/notation.'
+            : 'Add a concrete example, diagram steps, or formula calculation.',
+      },
+      {
+        id: 'r-3',
+        criterion: 'Completeness & exam rubric points (' + content.examPattern.gradingRubricHighlight + ')',
+        allocatedMarks: c3Alloc,
+        awardedMarks: c3Awarded,
+        fulfilled: c3Awarded === c3Alloc,
+        examinerNote:
+          c3Awarded === c3Alloc
+            ? 'Addressed full university marking scheme.'
+            : 'Expand your explanation to cover all parts of the question.',
+      },
+    ];
+
+    const missing: string[] = [];
+    if (!hasDefinitionWords) {
+      missing.push(`Define ${currentTopic.title} formally in your opening paragraph.`);
+    }
+    if (!hasExampleOrSchema) {
+      missing.push('Include a concrete example, diagram flow, or step-by-step derivation.');
+    }
+    if (!hasDepth) {
+      missing.push(`Cover all rubric points: ${content.examPattern.gradingRubricHighlight}`);
+    }
+
+    const beforeMastery = currentTopic.masteryPercentage;
+    const afterMastery = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(0.6 * (scorePct * 100) + 0.4 * beforeMastery)
+      )
+    );
+    onUpdateTopicMastery(currentTopic.id, afterMastery);
+
+    setSubmission({
+      id: `sub-${Date.now()}`,
+      topicId: currentTopic.id,
+      questionText: activeQuestion,
+      questionType: 'Conceptual',
+      totalMarks,
+      studentAnswer: studentAnswerText,
+      submittedAt: 'Just now',
+      status: 'evaluated',
+      score: totalAwarded,
+      verifierShield: true,
+      rubrics,
+      missingCriteria: missing,
+      misconceptions:
+        scorePct < 0.7 && content.commonMistakes[0]
+          ? [`Tip: Avoid "${content.commonMistakes[0].mistake}" — ${content.commonMistakes[0].remedy}`]
+          : [],
+      masteryDelta: {
+        before: beforeMastery,
+        after: afterMastery,
+      },
+    });
   };
 
   const handleRequestAppeal = () => {

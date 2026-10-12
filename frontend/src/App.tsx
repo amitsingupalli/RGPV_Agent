@@ -491,6 +491,8 @@ export default function App() {
           <ActiveStudyRoom
             currentTopic={currentTopic}
             allUnits={units}
+            subjectCode={profile.subjectCode}
+            subjectName={profile.subjectName}
             language={profile.language}
             onLanguageChange={handleLanguageChange}
             onSelectTopic={(id) => setSelectedTopicId(id)}
