@@ -2,17 +2,7 @@ import React, { useState } from 'react';
 import { 
   X, 
   Terminal, 
-  CheckCircle2, 
-  Clock, 
-  Cpu, 
-  Zap, 
-  ShieldCheck, 
-  Database, 
-  Activity,
-  Layers,
-  ArrowRight,
-  ChevronDown,
-  ChevronRight
+  CheckCircle2
 } from 'lucide-react';
 import { LangGraphTraceNode } from '../types';
 
@@ -36,7 +26,7 @@ export const TracingModal: React.FC<TracingModalProps> = ({
   const selectedNode = traceNodes.find((n) => n.id === selectedNodeId) || traceNodes[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div 
         className="w-full max-w-4xl max-h-[85vh] bg-[#18181b] border border-[#27272a] rounded-xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -48,16 +38,11 @@ export const TracingModal: React.FC<TracingModalProps> = ({
               <Terminal className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-zinc-100">
-                  LangGraph Agent Execution Traces & Node Telemetry
-                </h3>
-                <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono border border-emerald-500/20">
-                  All Invariants Verified
-                </span>
-              </div>
+              <h3 className="text-sm font-semibold text-zinc-100">
+                Pipeline Processing Logs
+              </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Deterministic DAG execution pipeline: Ingestion &rarr; Frequency Classification &rarr; LP Scheduler &rarr; Grounder &rarr; Verifier
+                Step-by-step execution timings for PDF parsing, question mapping, and schedule generation.
               </p>
             </div>
           </div>
@@ -69,129 +54,127 @@ export const TracingModal: React.FC<TracingModalProps> = ({
           </button>
         </div>
 
-        {/* Aggregate KPI Summary Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 px-6 py-3 bg-[#0e0e11] border-b border-[#27272a] text-xs font-mono">
-          <div>
-            <span className="text-zinc-500 block text-[11px]">Total Pipeline Latency:</span>
-            <span className="text-zinc-200 font-semibold">{totalLatency} ms</span>
+        {traceNodes.length === 0 ? (
+          <div className="p-12 text-center space-y-2">
+            <p className="text-sm font-semibold text-zinc-200">
+              No Pipeline Runs Yet (Starting from 0)
+            </p>
+            <p className="text-xs text-zinc-400">
+              Complete Step 1 (Course Setup &amp; Document Upload) to run the extraction and scheduling pipeline.
+            </p>
           </div>
-          <div>
-            <span className="text-zinc-500 block text-[11px]">Token Footprint:</span>
-            <span className="text-indigo-400 font-semibold">{totalTokens.toLocaleString()} Tokens</span>
-          </div>
-          <div>
-            <span className="text-zinc-500 block text-[11px]">Average Confidence:</span>
-            <span className="text-emerald-400 font-semibold">96.7%</span>
-          </div>
-          <div>
-            <span className="text-zinc-500 block text-[11px]">Guardrail Hallucination Check:</span>
-            <span className="text-emerald-400 font-semibold">0 Violations</span>
-          </div>
-        </div>
+        ) : (
+          <>
+            {/* Summary Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 px-6 py-3 bg-[#0e0e11] border-b border-[#27272a] text-xs font-mono">
+              <div>
+                <span className="text-zinc-500 block text-[11px]">Total Processing Time:</span>
+                <span className="text-zinc-200 font-semibold">{totalLatency} ms</span>
+              </div>
+              <div>
+                <span className="text-zinc-500 block text-[11px]">Total Tokens Processed:</span>
+                <span className="text-indigo-400 font-semibold">{totalTokens.toLocaleString()}</span>
+              </div>
+              <div>
+                <span className="text-zinc-500 block text-[11px]">Steps Completed:</span>
+                <span className="text-emerald-400 font-semibold">{traceNodes.length} Steps</span>
+              </div>
+            </div>
 
-        {/* Main Body: DAG Node List + Selected Node Inspection Deck */}
-        <div className="grid grid-cols-1 md:grid-cols-12 flex-1 overflow-hidden">
-          {/* Left: DAG Nodes List (5 cols) */}
-          <div className="md:col-span-5 border-r border-[#27272a] p-4 space-y-2 overflow-y-auto max-h-[55vh]">
-            <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 block px-1 mb-2">
-              LangGraph Directed Acyclic Graph (DAG) Nodes
-            </span>
+            {/* Main Body */}
+            <div className="grid grid-cols-1 md:grid-cols-12 flex-1 overflow-hidden">
+              <div className="md:col-span-5 border-r border-[#27272a] p-4 space-y-2 overflow-y-auto max-h-[55vh]">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 block px-1 mb-2">
+                  Pipeline Steps
+                </span>
 
-            {traceNodes.map((node, idx) => {
-              const isSelected = selectedNodeId === node.id;
-              return (
-                <div
-                  key={node.id}
-                  onClick={() => setSelectedNodeId(node.id)}
-                  className={`p-3 rounded-lg border text-xs cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-zinc-800/90 border-indigo-500 text-white shadow-sm'
-                      : 'bg-[#121214] border-[#27272a] text-zinc-300 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5 font-mono">
-                      <span className="text-[11px] text-zinc-500">0{idx + 1}.</span>
-                      <span className="font-semibold text-zinc-100">{node.nodeName.split(' ')[0]}</span>
+                {traceNodes.map((node, idx) => {
+                  const isSelected = selectedNode?.id === node.id;
+                  return (
+                    <div
+                      key={node.id}
+                      onClick={() => setSelectedNodeId(node.id)}
+                      className={`p-3 rounded-lg border text-xs cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-zinc-800/90 border-indigo-500 text-white shadow-sm'
+                          : 'bg-[#121214] border-[#27272a] text-zinc-300 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5 font-mono">
+                          <span className="text-[11px] text-zinc-500">0{idx + 1}.</span>
+                          <span className="font-semibold text-zinc-100">{node.nodeName}</span>
+                        </div>
+                        <span className="font-mono text-[11px] text-zinc-400">
+                          {node.latencyMs}ms
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-zinc-400 line-clamp-1">
+                        {node.description}
+                      </p>
+
+                      <div className="mt-2 flex items-center justify-end text-[10px] font-mono">
+                        <span className="text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Done
+                        </span>
+                      </div>
                     </div>
-                    <span className="font-mono text-[11px] text-zinc-400">
-                      {node.latencyMs}ms
+                  );
+                })}
+              </div>
+
+              {selectedNode && (
+                <div className="md:col-span-7 p-6 space-y-4 overflow-y-auto max-h-[55vh]">
+                  <div className="space-y-1">
+                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
+                      Step ID: {selectedNode.id}
                     </span>
+                    <h4 className="text-base font-bold text-zinc-100 pt-1">
+                      {selectedNode.nodeName}
+                    </h4>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      {selectedNode.description}
+                    </p>
                   </div>
 
-                  <p className="text-[11px] text-zinc-400 line-clamp-1">
-                    {node.description}
-                  </p>
+                  <div className="grid grid-cols-3 gap-3 text-xs font-mono">
+                    <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a]">
+                      <span className="text-zinc-500 text-[10px] block">Duration</span>
+                      <span className="text-zinc-100 font-bold text-sm">{selectedNode.latencyMs} ms</span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a]">
+                      <span className="text-zinc-500 text-[10px] block">Input Tokens</span>
+                      <span className="text-zinc-100 font-bold text-sm">{selectedNode.inputTokens}</span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a]">
+                      <span className="text-zinc-500 text-[10px] block">Output Tokens</span>
+                      <span className="text-zinc-100 font-bold text-sm">{selectedNode.outputTokens}</span>
+                    </div>
+                  </div>
 
-                  <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-zinc-500">
-                    <span>Conf: {node.confidenceScore}%</span>
-                    <span className="text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Completed
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-zinc-300 font-mono block">
+                      Step Metadata:
                     </span>
+                    <div className="p-4 rounded-lg bg-[#0e0e11] border border-[#27272a] font-mono text-xs text-zinc-300 overflow-x-auto">
+                      <pre>{JSON.stringify(selectedNode.details, null, 2)}</pre>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Right: Selected Node Telemetry & JSON View (7 cols) */}
-          <div className="md:col-span-7 p-6 space-y-4 overflow-y-auto max-h-[55vh]">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                  Node ID: {selectedNode.id}
-                </span>
-                <span className="text-xs font-mono text-emerald-400">
-                  Confidence: {selectedNode.confidenceScore}%
-                </span>
-              </div>
-              <h4 className="text-base font-bold text-zinc-100">
-                {selectedNode.nodeName}
-              </h4>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                {selectedNode.description}
-              </p>
+              )}
             </div>
-
-            {/* Performance Stats */}
-            <div className="grid grid-cols-3 gap-3 text-xs font-mono">
-              <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a]">
-                <span className="text-zinc-500 text-[10px] block">Execution Latency</span>
-                <span className="text-zinc-100 font-bold text-sm">{selectedNode.latencyMs} ms</span>
-              </div>
-              <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a]">
-                <span className="text-zinc-500 text-[10px] block">Input Tokens</span>
-                <span className="text-zinc-100 font-bold text-sm">{selectedNode.inputTokens}</span>
-              </div>
-              <div className="p-3 rounded-lg bg-[#121214] border border-[#27272a]">
-                <span className="text-zinc-500 text-[10px] block">Output Tokens</span>
-                <span className="text-zinc-100 font-bold text-sm">{selectedNode.outputTokens}</span>
-              </div>
-            </div>
-
-            {/* Invariant & Payload Details */}
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-zinc-300 font-mono block">
-                Execution State Invariants & Parameters:
-              </span>
-              <div className="p-4 rounded-lg bg-[#0e0e11] border border-[#27272a] font-mono text-xs text-zinc-300 overflow-x-auto">
-                <pre>{JSON.stringify(selectedNode.details, null, 2)}</pre>
-              </div>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {/* Footer */}
-        <div className="px-6 py-3.5 border-t border-[#27272a] bg-[#121214] flex items-center justify-between text-xs">
-          <span className="text-zinc-500 font-mono">
-            Pipeline Engine: LangGraph v0.2.1 • LLM Guardrail: Strict Zero-Hallucination
-          </span>
+        <div className="px-6 py-3.5 border-t border-[#27272a] bg-[#121214] flex items-center justify-end text-xs">
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium transition-colors cursor-pointer"
           >
-            Close Telemetry
+            Close
           </button>
         </div>
       </div>

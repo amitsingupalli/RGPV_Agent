@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BookOpen, 
   Lightbulb, 
@@ -7,23 +7,19 @@ import {
   Target, 
   Timer, 
   FileText, 
-  ShieldCheck, 
   CheckCircle2, 
   XCircle, 
-  ChevronRight, 
-  Sparkles, 
-  Code, 
   RefreshCw, 
   ArrowUpRight, 
-  Check,
+  ArrowRight,
   Send,
-  HelpCircle,
-  Award
+  Award,
+  FileCheck
 } from 'lucide-react';
 import { Topic, Language, Unit, QuizSubmission, RubricItem } from '../types';
 
 interface ActiveStudyRoomProps {
-  currentTopic: Topic;
+  currentTopic: Topic | null;
   allUnits: Unit[];
   language: Language;
   onLanguageChange: (lang: Language) => void;
@@ -31,6 +27,7 @@ interface ActiveStudyRoomProps {
   onOpenCitation: (citation: any) => void;
   onUpdateTopicMastery: (topicId: string, newMastery: number) => void;
   onTriggerHitlAppeal: (reason: string) => void;
+  onGoToSetup: () => void;
 }
 
 export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
@@ -42,158 +39,254 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
   onOpenCitation,
   onUpdateTopicMastery,
   onTriggerHitlAppeal,
+  onGoToSetup,
 }) => {
-  // Diagnostic state
+  // Diagnostic state (starts blank)
   const [selectedDiagnosticOption, setSelectedDiagnosticOption] = useState<number | null>(null);
   const [diagnosticSubmitted, setDiagnosticSubmitted] = useState<boolean>(false);
 
-  // Quiz submission state
-  const [studentAnswerText, setStudentAnswerText] = useState<string>(
-    'Functional Dependency (X -> Y) holds if whenever two tuples agree on attribute X, they must also agree on attribute Y.\n\n3NF Condition: For every non-trivial FD X -> Y, either:\n1. X is a superkey, OR\n2. Y is a prime attribute (part of candidate key).\n\nBCNF Condition: For every non-trivial FD X -> Y, X MUST be a superkey.\n\nCounter Example: Consider R(Student, Subject, Teacher) with FDs:\n(Student, Subject) -> Teacher\nTeacher -> Subject\nCandidate keys: {Student, Subject}, {Student, Teacher}.\nHere Teacher -> Subject satisfies 3NF because Subject is prime, but violates BCNF because Teacher is not a superkey.'
-  );
+  // Quiz submission state — starts completely empty (no pre-written answer, no pre-graded result)
+  const [customQuestionText, setCustomQuestionText] = useState<string>('');
+  const [isEditingQuestion, setIsEditingQuestion] = useState<boolean>(false);
+  const [studentAnswerText, setStudentAnswerText] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  const [submission, setSubmission] = useState<QuizSubmission | null>({
-    id: 'sub-sample',
-    topicId: currentTopic.id,
-    questionText: 'Differentiate between 3NF and BCNF with a relation that is in 3NF but violates BCNF. State the impact on dependency preservation.',
-    questionType: 'Conceptual',
-    totalMarks: 5.0,
-    studentAnswer: '',
-    submittedAt: 'Just now',
-    status: 'evaluated',
-    score: 4.5,
-    verifierShield: true,
-    rubrics: [
-      {
-        id: 'r-1',
-        criterion: 'Precise definition of Functional Dependency and candidate keys identified',
-        allocatedMarks: 1.0,
-        awardedMarks: 1.0,
-        fulfilled: true,
-        examinerNote: 'Accurately stated tuple-equivalence rule and candidate key combinations.'
-      },
-      {
-        id: 'r-2',
-        criterion: 'Distinction between 3NF (prime attribute exemption) and strict BCNF superkey condition',
-        allocatedMarks: 1.5,
-        awardedMarks: 1.5,
-        fulfilled: true,
-        examinerNote: 'Clear breakdown of LHS superkey rule and prime attribute clause.'
-      },
-      {
-        id: 'r-3',
-        criterion: 'Valid worked counter-example relation demonstrating 3NF vs BCNF',
-        allocatedMarks: 1.5,
-        awardedMarks: 1.5,
-        fulfilled: true,
-        examinerNote: 'Standard Student-Teacher-Subject schema provided with valid FDs.'
-      },
-      {
-        id: 'r-4',
-        criterion: 'Impact on Dependency Preservation and Lossless Join analyzed during BCNF decomposition',
-        allocatedMarks: 1.0,
-        awardedMarks: 0.5,
-        fulfilled: false,
-        examinerNote: 'Partially stated; omitted the formal proof that dependency (Student, Subject)->Teacher cannot be preserved in decomposed schemas.'
-      }
-    ],
-    missingCriteria: [
-      'Did not explicitly show that testing (Student, Subject)->Teacher requires expensive multi-relation join in decomposed BCNF schema.'
-    ],
-    misconceptions: [
-      'Be careful: In 3NF, Y only needs to be a single prime attribute, not necessarily the entire candidate key.'
-    ],
-    masteryDelta: {
-      before: currentTopic.masteryPercentage,
-      after: Math.min(100, currentTopic.masteryPercentage + 20)
-    }
-  });
-
+  const [submission, setSubmission] = useState<QuizSubmission | null>(null);
   const [hasAppealed, setHasAppealed] = useState<boolean>(false);
+
+  // Reset state whenever user switches to a different topic
+  useEffect(() => {
+    setSelectedDiagnosticOption(null);
+    setDiagnosticSubmitted(false);
+    setStudentAnswerText('');
+    setSubmission(null);
+    setHasAppealed(false);
+    setIsEditingQuestion(false);
+    if (currentTopic) {
+      setCustomQuestionText(currentTopic.pedagogicalContent.examPattern.typicalQuestion);
+    }
+  }, [currentTopic?.id]);
+
+  if (!currentTopic || allUnits.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto my-12 border border-[#27272a] rounded-xl bg-[#18181b] p-8 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+          <FileCheck className="w-6 h-6" />
+        </div>
+        <h1 className="text-lg font-bold text-zinc-100">
+          Study Room Ready After Setup
+        </h1>
+        <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+          Complete Step 1 by setting up your subject and uploading your course files so we can load your topic notes and practice questions.
+        </p>
+        <button
+          onClick={onGoToSetup}
+          className="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors inline-flex items-center gap-2 cursor-pointer"
+        >
+          <span>Go to Step 1: Setup &amp; Documents</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
 
   const wordCount = studentAnswerText.trim().split(/\s+/).filter(Boolean).length;
   const content = currentTopic.pedagogicalContent;
+  const activeQuestion =
+    customQuestionText.trim() || content.examPattern.typicalQuestion;
+  const totalMarks = content.examPattern.standardMarks || 7;
 
   const handleDiagnosticSubmit = (index: number) => {
     setSelectedDiagnosticOption(index);
     setDiagnosticSubmitted(true);
   };
 
-  const handleInsertSQLTemplate = (snippet: string) => {
-    setStudentAnswerText((prev) => prev + '\n\n' + snippet);
+  const handleInsertTemplate = (snippet: string) => {
+    setStudentAnswerText((prev) => (prev ? prev + '\n\n' + snippet : snippet));
   };
 
+  // Evaluate what the student actually wrote against topic concepts & rubrics
   const handleSubmitAnswer = () => {
     setIsVerifying(true);
+
     setTimeout(() => {
       setIsVerifying(false);
-      const newScore = 4.5;
+      const answerLower = studentAnswerText.toLowerCase();
+
+      // Check for adversarial prompt injection attempts
+      const injectionPatterns = [
+        'ignore previous',
+        'ignore all instructions',
+        'give full marks',
+        'award 100%',
+        'system prompt',
+      ];
+      const hasInjection = injectionPatterns.some((pat) => answerLower.includes(pat));
+
+      if (hasInjection) {
+        setSubmission({
+          id: `sub-${Date.now()}`,
+          topicId: currentTopic.id,
+          questionText: activeQuestion,
+          questionType: 'Conceptual',
+          totalMarks,
+          studentAnswer: studentAnswerText,
+          submittedAt: 'Just now',
+          status: 'evaluated',
+          score: 0,
+          verifierShield: true,
+          rubrics: [
+            {
+              id: 'r-sec',
+              criterion: 'Valid academic response without grading manipulation instructions',
+              allocatedMarks: totalMarks,
+              awardedMarks: 0,
+              fulfilled: false,
+              examinerNote: 'Detected grading override instruction in answer text. Please write a genuine subject answer.',
+            },
+          ],
+          missingCriteria: ['Please remove instruction-override phrases and answer the question directly.'],
+          misconceptions: [],
+          masteryDelta: {
+            before: currentTopic.masteryPercentage,
+            after: currentTopic.masteryPercentage,
+          },
+        });
+        return;
+      }
+
+      // Extract significant keywords from topic title and definition
+      const rawKeywords = `${currentTopic.title} ${content.coreDefinition.en}`
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length >= 5);
+      const uniqueKeywords = Array.from(new Set(rawKeywords)).slice(0, 12);
+      const matchedKeywords = uniqueKeywords.filter((kw) => answerLower.includes(kw));
+      const keywordRatio =
+        uniqueKeywords.length > 0 ? matchedKeywords.length / uniqueKeywords.length : 0.5;
+
+      // Check structural elements
+      const hasDefinitionWords = wordCount >= 18 && keywordRatio >= 0.2;
+      const hasExampleOrSchema =
+        answerLower.includes('example') ||
+        answerLower.includes('consider') ||
+        answerLower.includes('select ') ||
+        answerLower.includes('->') ||
+        answerLower.includes('step') ||
+        answerLower.includes('table') ||
+        wordCount >= 45;
+      const hasDepth = wordCount >= 65 && keywordRatio >= 0.35;
+
+      const c1Alloc = Number((totalMarks * 0.3).toFixed(1));
+      const c2Alloc = Number((totalMarks * 0.4).toFixed(1));
+      const c3Alloc = Number((totalMarks - c1Alloc - c2Alloc).toFixed(1));
+
+      const c1Awarded = hasDefinitionWords
+        ? c1Alloc
+        : wordCount >= 8
+        ? Number((c1Alloc * 0.5).toFixed(1))
+        : 0;
+      const c2Awarded = hasExampleOrSchema
+        ? c2Alloc
+        : wordCount >= 25
+        ? Number((c2Alloc * 0.5).toFixed(1))
+        : 0;
+      const c3Awarded = hasDepth
+        ? c3Alloc
+        : wordCount >= 35
+        ? Number((c3Alloc * 0.5).toFixed(1))
+        : 0;
+
+      const totalAwarded = Number((c1Awarded + c2Awarded + c3Awarded).toFixed(1));
+      const scorePct = totalAwarded / totalMarks;
+
+      const rubrics: RubricItem[] = [
+        {
+          id: 'r-1',
+          criterion: `Core definition & key concepts of ${currentTopic.title}`,
+          allocatedMarks: c1Alloc,
+          awardedMarks: c1Awarded,
+          fulfilled: c1Awarded === c1Alloc,
+          examinerNote:
+            c1Awarded === c1Alloc
+              ? 'Covered core terminology clearly.'
+              : 'Include a clearer formal definition and key technical terms.',
+        },
+        {
+          id: 'r-2',
+          criterion: 'Worked example, diagram notation, or schema illustration',
+          allocatedMarks: c2Alloc,
+          awardedMarks: c2Awarded,
+          fulfilled: c2Awarded === c2Alloc,
+          examinerNote:
+            c2Awarded === c2Alloc
+              ? 'Included concrete example/notation.'
+              : 'Add a concrete example relation, diagram steps, or SQL/formula snippet.',
+        },
+        {
+          id: 'r-3',
+          criterion: 'Completeness & exam rubric points (' + content.examPattern.gradingRubricHighlight + ')',
+          allocatedMarks: c3Alloc,
+          awardedMarks: c3Awarded,
+          fulfilled: c3Awarded === c3Alloc,
+          examinerNote:
+            c3Awarded === c3Alloc
+              ? 'Addressed full university marking scheme.'
+              : 'Expand your explanation to cover all parts of the question.',
+        },
+      ];
+
+      const missing: string[] = [];
+      if (!hasDefinitionWords) {
+        missing.push(`Define ${currentTopic.title} formally in your opening paragraph.`);
+      }
+      if (!hasExampleOrSchema) {
+        missing.push('Include a concrete example, table schema, or step-by-step derivation.');
+      }
+      if (!hasDepth) {
+        missing.push(`Cover all rubric points: ${content.examPattern.gradingRubricHighlight}`);
+      }
+
       const beforeMastery = currentTopic.masteryPercentage;
-      const afterMastery = Math.min(100, beforeMastery + 18);
+      const afterMastery = Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(0.6 * (scorePct * 100) + 0.4 * beforeMastery)
+        )
+      );
       onUpdateTopicMastery(currentTopic.id, afterMastery);
 
       setSubmission({
         id: `sub-${Date.now()}`,
         topicId: currentTopic.id,
-        questionText: 'Differentiate between 3NF and BCNF with a relation that is in 3NF but violates BCNF. State the impact on dependency preservation.',
+        questionText: activeQuestion,
         questionType: 'Conceptual',
-        totalMarks: 5.0,
+        totalMarks,
         studentAnswer: studentAnswerText,
         submittedAt: 'Just now',
         status: 'evaluated',
-        score: newScore,
+        score: totalAwarded,
         verifierShield: true,
-        rubrics: [
-          {
-            id: 'r-1',
-            criterion: 'Precise definition of Functional Dependency and candidate keys identified',
-            allocatedMarks: 1.0,
-            awardedMarks: 1.0,
-            fulfilled: true,
-            examinerNote: 'Accurately stated tuple-equivalence rule and candidate key combinations.'
-          },
-          {
-            id: 'r-2',
-            criterion: 'Distinction between 3NF (prime attribute exemption) and strict BCNF superkey condition',
-            allocatedMarks: 1.5,
-            awardedMarks: 1.5,
-            fulfilled: true,
-            examinerNote: 'Clear breakdown of LHS superkey rule and prime attribute clause.'
-          },
-          {
-            id: 'r-3',
-            criterion: 'Valid worked counter-example relation demonstrating 3NF vs BCNF',
-            allocatedMarks: 1.5,
-            awardedMarks: 1.5,
-            fulfilled: true,
-            examinerNote: 'Standard Student-Teacher-Subject schema provided with valid FDs.'
-          },
-          {
-            id: 'r-4',
-            criterion: 'Impact on Dependency Preservation and Lossless Join analyzed during BCNF decomposition',
-            allocatedMarks: 1.0,
-            awardedMarks: 0.5,
-            fulfilled: false,
-            examinerNote: 'Partially stated; omitted the formal proof that dependency (Student, Subject)->Teacher cannot be preserved in decomposed schemas.'
-          }
-        ],
-        missingCriteria: [
-          'Explicit proof of lost dependency (Student, Subject) -> Teacher in decomposed schema R1(Teacher, Subject) and R2(Student, Teacher).'
-        ],
-        misconceptions: [
-          'In RGPV marking, always explicitly state whether the decomposition achieves both lossless join and dependency preservation.'
-        ],
+        rubrics,
+        missingCriteria: missing,
+        misconceptions:
+          scorePct < 0.7 && content.commonMistakes[0]
+            ? [`Tip: Avoid "${content.commonMistakes[0].mistake}" — ${content.commonMistakes[0].remedy}`]
+            : [],
         masteryDelta: {
           before: beforeMastery,
-          after: afterMastery
-        }
+          after: afterMastery,
+        },
       });
-    }, 1400);
+    }, 600);
   };
 
   const handleRequestAppeal = () => {
     setHasAppealed(true);
-    onTriggerHitlAppeal(`Quiz Evaluation Appeal for ${currentTopic.title} (Question 4.5/5.0 Marks Review)`);
+    onTriggerHitlAppeal(
+      `Review requested for ${currentTopic.title} (${submission?.score}/${totalMarks} Marks)`
+    );
   };
 
   return (
@@ -205,8 +298,8 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
             <BookOpen className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-zinc-400">Current Study Topic:</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono text-zinc-400">Select Topic:</span>
               <select
                 value={currentTopic.id}
                 onChange={(e) => onSelectTopic(e.target.value)}
@@ -214,13 +307,13 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
               >
                 {allUnits.flatMap((u) => u.topics).map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.title} (Mastery: {t.masteryPercentage}%)
+                    {t.title} (Familiarity: {t.masteryPercentage}%)
                   </option>
                 ))}
               </select>
             </div>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Source-grounded pedagogical reader paired with rubric-based verification agent.
+              Read the structured topic notes on the left, then write and check your practice answer on the right.
             </p>
           </div>
         </div>
@@ -236,7 +329,7 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              English (RGPV Academic)
+              English Notes
             </button>
             <button
               onClick={() => onLanguageChange('hi')}
@@ -246,7 +339,7 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              Hinglish (Intuitive Indian Examples)
+              Hinglish Notes
             </button>
           </div>
         </div>
@@ -254,21 +347,19 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
 
       {/* Two-Column Split Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* ========================================================================= */}
-        {/* Left Column: Standardized 7-Section Pedagogical Reader (7 cols)            */}
-        {/* ========================================================================= */}
+        {/* Left Column: Topic Study Notes (7 cols) */}
         <div className="lg:col-span-7 space-y-5">
-          {/* Section 1: 📌 Core Concept Definition */}
+          {/* Section 1: Core Concept Definition */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-indigo-400 font-mono text-sm">01.</span>
-                <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
-                  <span>Core Concept Definition</span>
+                <h3 className="text-sm font-semibold text-zinc-100">
+                  Core Concept &amp; Definition
                 </h3>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                Syllabus Anchor
+                Syllabus Topic
               </span>
             </div>
 
@@ -277,14 +368,14 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
             </p>
           </div>
 
-          {/* Section 2: 💡 Intuitive Analogy */}
+          {/* Section 2: Real-World Analogy */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-amber-400 font-mono text-sm">02.</span>
                 <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
                   <Lightbulb className="w-4 h-4 text-amber-400" />
-                  <span>Intuitive Real-World Analogy</span>
+                  <span>Easy-to-Remember Analogy</span>
                 </h3>
               </div>
               <span className="text-xs text-zinc-400 font-mono">
@@ -292,36 +383,36 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
               </span>
             </div>
 
-            <div className="p-3.5 rounded-lg bg-amber-950/20 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed space-y-2">
+            <div className="p-3.5 rounded-lg bg-amber-950/20 border border-amber-500/20 text-xs text-amber-200/90 leading-relaxed">
               <p>
                 {language === 'en' ? content.analogy.en : content.analogy.hi}
               </p>
             </div>
           </div>
 
-          {/* Section 3: 📝 Worked Step-by-Step RGPV Example */}
+          {/* Section 3: Worked Step-by-Step Example */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-emerald-400 font-mono text-sm">03.</span>
                 <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
                   <FileCode className="w-4 h-4 text-emerald-400" />
-                  <span>Worked Step-by-Step RGPV Example</span>
+                  <span>Solved Exam Example</span>
                 </h3>
               </div>
-              <span className="text-xs font-mono text-emerald-400">
-                10-Mark Standard Proof
-              </span>
             </div>
 
             <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-medium">
-              <span className="text-zinc-500 font-mono block text-[11px] mb-1">Problem Statement:</span>
-              "{content.workedExample.problemStatement}"
+              <span className="text-zinc-500 font-mono block text-[11px] mb-1">Question:</span>
+              &ldquo;{content.workedExample.problemStatement}&rdquo;
             </div>
 
             <div className="space-y-3">
               {content.workedExample.stepByStepSolution.map((step) => (
-                <div key={step.step} className="p-3.5 rounded-lg bg-[#121214] border border-[#27272a] space-y-2 text-xs">
+                <div
+                  key={step.step}
+                  className="p-3.5 rounded-lg bg-[#121214] border border-[#27272a] space-y-2 text-xs"
+                >
                   <div className="flex items-center gap-2 font-mono text-indigo-400 font-semibold">
                     <span>Step {step.step}:</span>
                     <span className="text-zinc-200 font-sans">{step.title}</span>
@@ -339,22 +430,24 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
             </div>
           </div>
 
-          {/* Section 4: ⚠️ Common Exam Mistakes */}
+          {/* Section 4: Common Exam Mistakes */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-rose-400 font-mono text-sm">04.</span>
                 <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-rose-400" />
-                  <span>Common Exam Mistakes (Where Examiners Deduct Marks)</span>
+                  <span>Common Mistakes to Avoid in Exam</span>
                 </h3>
               </div>
-              <span className="text-xs font-mono text-rose-400">Examiner Penalty Radar</span>
             </div>
 
             <div className="space-y-2.5">
               {content.commonMistakes.map((item, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/20 space-y-1.5 text-xs">
+                <div
+                  key={idx}
+                  className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/20 space-y-1.5 text-xs"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-rose-300">
                       ✗ {item.mistake}
@@ -364,50 +457,62 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                     </span>
                   </div>
                   <p className="text-zinc-300 text-[11px]">
-                    <strong className="text-emerald-400 font-mono">Remedy:</strong> {item.remedy}
+                    <strong className="text-emerald-400 font-mono">How to fix:</strong>{' '}
+                    {item.remedy}
                   </p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Section 5: 🎯 Frequent RGPV Exam Pattern */}
+          {/* Section 5: Frequent Exam Pattern */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-purple-400 font-mono text-sm">05.</span>
                 <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
                   <Target className="w-4 h-4 text-purple-400" />
-                  <span>Frequent RGPV Exam Formulation</span>
+                  <span>Typical University Question Pattern</span>
                 </h3>
               </div>
               <span className="text-xs font-mono text-purple-300">
-                {content.examPattern.standardMarks} Marks Compulsory
+                {content.examPattern.standardMarks} Marks
               </span>
             </div>
 
             <div className="p-3.5 rounded-lg bg-[#121214] border border-[#27272a] space-y-2 text-xs">
               <p className="font-mono font-medium text-zinc-200">
-                "{content.examPattern.typicalQuestion}"
+                &ldquo;{content.examPattern.typicalQuestion}&rdquo;
               </p>
               <div className="pt-2 border-t border-zinc-800 text-[11px] text-zinc-400">
-                <strong className="text-indigo-400 font-mono">Grading Rubric Breakdown:</strong>{' '}
+                <strong className="text-indigo-400 font-mono">Key Points to Include:</strong>{' '}
                 {content.examPattern.gradingRubricHighlight}
               </div>
             </div>
           </div>
 
-          {/* Section 6: ⏱️ Mini 1-Minute Diagnostic Check */}
+          {/* Section 6: Quick 1-Question MCQ Check */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-cyan-400 font-mono text-sm">06.</span>
                 <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
                   <Timer className="w-4 h-4 text-cyan-400" />
-                  <span>Mini 1-Minute Diagnostic Recall Check</span>
+                  <span>Quick Concept Check (MCQ)</span>
                 </h3>
               </div>
-              <span className="text-xs font-mono text-zinc-400">Instant Check</span>
+              {diagnosticSubmitted && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDiagnosticOption(null);
+                    setDiagnosticSubmitted(false);
+                  }}
+                  className="text-[11px] text-indigo-400 hover:underline cursor-pointer"
+                >
+                  Retry MCQ
+                </button>
+              )}
             </div>
 
             <p className="text-xs font-medium text-zinc-200">
@@ -418,11 +523,13 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
               {content.diagnosticCheck.options.map((option, idx) => {
                 const isSelected = selectedDiagnosticOption === idx;
                 const isCorrect = idx === content.diagnosticCheck.correctAnswerIndex;
-                let btnStyle = 'bg-[#121214] border-[#27272a] text-zinc-300 hover:border-zinc-700';
+                let btnStyle =
+                  'bg-[#121214] border-[#27272a] text-zinc-300 hover:border-zinc-700';
 
                 if (diagnosticSubmitted) {
                   if (isCorrect) {
-                    btnStyle = 'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-semibold';
+                    btnStyle =
+                      'bg-emerald-950/40 border-emerald-500 text-emerald-200 font-semibold';
                   } else if (isSelected && !isCorrect) {
                     btnStyle = 'bg-rose-950/40 border-rose-500 text-rose-200';
                   }
@@ -451,24 +558,23 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
             </div>
 
             {diagnosticSubmitted && (
-              <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 space-y-1 animate-in fade-in duration-200">
+              <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 space-y-1">
                 <span className="font-semibold text-emerald-400 font-mono">Explanation:</span>
                 <p>{content.diagnosticCheck.explanation}</p>
               </div>
             )}
           </div>
 
-          {/* Section 7: 📑 Source Citations */}
+          {/* Section 7: Source Citations */}
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="text-zinc-400 font-mono text-sm">07.</span>
                 <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-1.5">
                   <FileText className="w-4 h-4 text-zinc-400" />
-                  <span>Verifiable Academic Citations & Bounding Box Proofs</span>
+                  <span>PDF Page References</span>
                 </h3>
               </div>
-              <span className="text-xs font-mono text-zinc-500">Hallucination Barrier</span>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -478,23 +584,19 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   onClick={() => onOpenCitation(cite)}
                   className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 font-mono hover:text-indigo-400 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>[{cite.docName}, Page {cite.page}]</span>
+                  <span>
+                    [{cite.docName}, Page {cite.page}]
+                  </span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-zinc-500" />
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-zinc-500 italic">
-              Click any citation pill to inspect the actual scanned textbook/exam paper bounding box coordinates.
-            </p>
           </div>
         </div>
 
-        {/* ========================================================================= */}
-        {/* Right Column: Interactive Rubric-Based Quiz Runner & Evaluation Agent     */}
-        {/* ========================================================================= */}
+        {/* Right Column: Blank-Slate Practice Answer Box & Rubric Checker (5 cols) */}
         <div className="lg:col-span-5 space-y-5 sticky top-20">
           <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-4 shadow-xl">
-            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded bg-indigo-500/10 text-indigo-400">
@@ -502,67 +604,91 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-zinc-100">
-                    Rubric Quiz & Answer Evaluator
+                    Write &amp; Check Practice Answer
                   </h3>
                   <span className="text-[11px] text-zinc-400 font-mono">
-                    Topic: {currentTopic.title}
+                    {currentTopic.title}
                   </span>
                 </div>
               </div>
               <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                [5 Marks Target]
+                [{totalMarks} Marks]
               </span>
             </div>
 
-            {/* Question Prompt Card */}
+            {/* Question Prompt Card (with option for user to enter their own question) */}
             <div className="p-3.5 rounded-lg bg-[#121214] border border-[#27272a] space-y-2 text-xs">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                  Conceptual Problem
+                  Practice Question
                 </span>
-                <span className="text-[10px] font-mono text-zinc-500">
-                  RGPV University Standard Marking
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingQuestion(!isEditingQuestion)}
+                  className="text-[11px] text-indigo-400 hover:underline cursor-pointer"
+                >
+                  {isEditingQuestion ? 'Done Editing' : 'Use Custom Question'}
+                </button>
               </div>
-              <p className="font-medium text-zinc-200 leading-relaxed font-sans">
-                "Differentiate between 3NF and BCNF with a relation that is in 3NF but violates BCNF. State the impact on dependency preservation."
-              </p>
+
+              {isEditingQuestion ? (
+                <textarea
+                  rows={3}
+                  value={customQuestionText}
+                  onChange={(e) => setCustomQuestionText(e.target.value)}
+                  placeholder="Paste or type your own exam question here..."
+                  className="w-full bg-[#18181b] border border-zinc-700 rounded p-2 text-xs text-zinc-200 focus:outline-none focus:border-indigo-500"
+                />
+              ) : (
+                <p className="font-medium text-zinc-200 leading-relaxed font-sans">
+                  &ldquo;{activeQuestion}&rdquo;
+                </p>
+              )}
             </div>
 
-            {/* Student Answer Area with SQL snippet helpers & word counter */}
+            {/* Student Answer Area — Starts Empty! */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span className="font-medium text-zinc-300">Your Detailed Answer:</span>
-                <div className="flex items-center gap-2">
+                <span className="font-medium text-zinc-300">Your Answer:</span>
+                <div className="flex items-center gap-3">
                   <span className="text-[11px] font-mono text-zinc-500">
                     {wordCount} words
                   </span>
+                  {studentAnswerText && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStudentAnswerText('');
+                        setSubmission(null);
+                      }}
+                      className="text-[11px] text-zinc-500 hover:text-rose-400 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Quick Snippet Helpers */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] font-mono">
-                <span className="text-zinc-500 text-[10px]">Insert:</span>
+                <span className="text-zinc-500 text-[10px]">Insert template:</span>
                 <button
                   type="button"
-                  onClick={() => handleInsertSQLTemplate('R(A, B, C, D) with FDs { A->B, BC->D }')}
+                  onClick={() =>
+                    handleInsertTemplate('Definition:\n\nExample / Schema:\n\nKey Properties:')
+                  }
                   className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
                 >
-                  + Schema R(A,B,C)
+                  + Answer Outline
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleInsertSQLTemplate('Candidate Keys: {A, B}+ = {A, B, C, D}')}
+                  onClick={() =>
+                    handleInsertTemplate('Consider Relation R(A, B, C, D) with FDs:\n')
+                  }
                   className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
                 >
-                  + Key Closure
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleInsertSQLTemplate('SELECT * FROM R WHERE ...')}
-                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
-                >
-                  + SQL
+                  + Relation R(A,B,C)
                 </button>
               </div>
 
@@ -570,7 +696,7 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                 rows={8}
                 value={studentAnswerText}
                 onChange={(e) => setStudentAnswerText(e.target.value)}
-                placeholder="Type your structured answer with definitions, schemas, and counter-examples..."
+                placeholder="Write your exam answer here from scratch (include definition, example/diagram steps, and key points)..."
                 className="w-full bg-[#121214] border border-[#27272a] rounded-lg p-3 font-mono text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 leading-relaxed transition-colors resize-y"
               />
             </div>
@@ -578,7 +704,7 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
             {/* Submit Button */}
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-zinc-500">
-                Evaluated against RGPV 4-point rubric
+                Checked against {totalMarks}-mark rubric
               </span>
               <button
                 type="button"
@@ -589,41 +715,47 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                 {isVerifying ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Evaluating Rubric Points...</span>
+                    <span>Checking Answer...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-3.5 h-3.5" />
-                    <span>Submit Answer for Verification</span>
+                    <span>Evaluate My Answer</span>
                   </>
                 )}
               </button>
             </div>
 
-            {/* Grading & Verification Result Card */}
+            {/* Grading Result Card (Only shown AFTER the student actually submits an answer!) */}
             {submission && submission.status === 'evaluated' && (
-              <div className="pt-4 border-t border-zinc-800 space-y-4 animate-in fade-in duration-200">
-                {/* Score Header */}
+              <div className="pt-4 border-t border-zinc-800 space-y-4">
                 <div className="p-3.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between">
                   <div>
                     <span className="text-[11px] text-emerald-400 font-mono block">
-                      Awarded Exam Marks:
+                      Score Awarded:
                     </span>
                     <div className="text-xl font-bold font-mono text-white mt-0.5">
-                      {submission.score} <span className="text-xs text-zinc-400 font-normal">/ {submission.totalMarks} Marks</span>
+                      {submission.score}{' '}
+                      <span className="text-xs text-zinc-400 font-normal">
+                        / {submission.totalMarks} Marks
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 text-xs font-medium">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Verified by Verifier Agent</span>
-                  </div>
+                  {submission.masteryDelta && (
+                    <div className="text-right font-mono text-xs">
+                      <span className="text-zinc-400 block text-[10px]">Topic Mastery:</span>
+                      <span className="text-emerald-400 font-semibold">
+                        {submission.masteryDelta.before}% &rarr; {submission.masteryDelta.after}%
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Rubric Criteria Evaluation List */}
+                {/* Rubric Breakdown */}
                 <div className="space-y-2">
                   <span className="text-xs font-semibold text-zinc-300 font-mono block">
-                    Detailed Rubric Fulfillment Matrix:
+                    Rubric Checklist:
                   </span>
                   <div className="space-y-1.5">
                     {submission.rubrics?.map((rubric) => (
@@ -658,12 +790,12 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   </div>
                 </div>
 
-                {/* Missing Criteria / Pitfalls */}
+                {/* Missing Criteria */}
                 {submission.missingCriteria && submission.missingCriteria.length > 0 && (
                   <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-xs text-amber-200 space-y-1">
                     <span className="font-semibold text-amber-300 flex items-center gap-1 font-mono text-[11px]">
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                      Missing Examiner Criteria:
+                      How to improve your answer:
                     </span>
                     <ul className="list-disc list-inside text-[11px] space-y-0.5 text-zinc-300">
                       {submission.missingCriteria.map((item, i) => (
@@ -673,32 +805,10 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   </div>
                 )}
 
-                {/* Misconceptions Box */}
-                {submission.misconceptions && submission.misconceptions.length > 0 && (
-                  <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-500/20 text-xs text-rose-200 space-y-1">
-                    <span className="font-semibold text-rose-300 font-mono text-[11px]">
-                      Examiner Misconception Flag:
-                    </span>
-                    <p className="text-[11px] text-zinc-300">
-                      {submission.misconceptions[0]}
-                    </p>
-                  </div>
-                )}
-
-                {/* Topic Mastery Delta */}
-                {submission.masteryDelta && (
-                  <div className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-between text-xs font-mono">
-                    <span className="text-zinc-400">Topic Mastery Delta:</span>
-                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                      {submission.masteryDelta.before}% &rarr; {submission.masteryDelta.after}% (+{submission.masteryDelta.after - submission.masteryDelta.before}%)
-                    </span>
-                  </div>
-                )}
-
-                {/* Human-In-The-Loop Appeal Action */}
+                {/* Appeal / Override Option */}
                 <div className="pt-2 flex justify-between items-center text-xs">
                   <span className="text-zinc-500 text-[11px]">
-                    Disagree with verifier rubrics?
+                    Want to flag this score for manual review?
                   </span>
                   {!hasAppealed ? (
                     <button
@@ -706,11 +816,11 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                       onClick={handleRequestAppeal}
                       className="px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs border border-zinc-700 transition-colors cursor-pointer"
                     >
-                      Request Human/Instructor Appeal
+                      Flag for Review
                     </button>
                   ) : (
                     <span className="text-amber-400 font-mono text-[11px]">
-                      ✓ Appeal Queued for Instructor Review
+                      ✓ Flagged for Review
                     </span>
                   )}
                 </div>
