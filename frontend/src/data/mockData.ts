@@ -1,18 +1,26 @@
 import { Unit, PYQQuestion, DaySchedule, StudentProfile, LangGraphTraceNode } from '../types';
 
 export const initialStudentProfile: StudentProfile = {
-  program: 'B.Tech',
-  branch: 'Computer Science & Engineering',
-  semester: '4th Semester (IV)',
-  subjectCode: 'CS-403',
-  subjectName: 'Database Management Systems (DBMS)',
-  targetScore: 82,
+  studentName: '',
+  university: 'RGPV Bhopal',
+  program: '',
+  branch: '',
+  semester: '',
+  subjectCode: '',
+  subjectName: '',
+  maxExamMarks: 70,
+  targetScore: 55,
   dailyHoursCap: 2.5,
-  examDate: '2026-10-12',
+  bufferDays: 2,
+  preferredStudySlot: 'morning',
+  startingLevel: 'zero',
+  examDate: '',
+  daysRemaining: 14,
   language: 'en',
+  isSetupComplete: false,
   planApproved: false,
-  hitlInterruptActive: true,
-  hitlInterruptReason: 'Study Plan Generated — Awaiting Your Review & Constraint Approval',
+  hitlInterruptActive: false,
+  hitlInterruptReason: undefined,
 };
 
 export const pyqQuestions: PYQQuestion[] = [

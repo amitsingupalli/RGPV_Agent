@@ -1,6 +1,20 @@
 export type Language = 'en' | 'hi';
 
-export type SubjectCode = 'CS-403';
+export type SubjectCode = string;
+
+export type StudyTimeSlot = 'morning' | 'afternoon' | 'night' | 'flexible';
+
+export type StartingPreparationLevel = 'zero' | 'basics' | 'custom';
+
+export interface UploadedDocumentItem {
+  id: string;
+  name: string;
+  size: string;
+  pages: number;
+  category: 'Syllabus' | 'PYQ' | 'Notes';
+  status: 'ready' | 'processing' | 'verified';
+  progress: number;
+}
 
 export interface PYQQuestion {
   id: string;
@@ -110,15 +124,23 @@ export interface DaySchedule {
 }
 
 export interface StudentProfile {
+  studentName: string;
+  university: string;
   program: string;
   branch: string;
   semester: string;
   subjectCode: string;
   subjectName: string;
-  targetScore: number; // out of 100
-  dailyHoursCap: number; // e.g. 2.5
+  maxExamMarks: number;
+  targetScore: number;
+  dailyHoursCap: number;
+  bufferDays: number;
+  preferredStudySlot: StudyTimeSlot;
+  startingLevel: StartingPreparationLevel;
   examDate: string;
+  daysRemaining: number;
   language: Language;
+  isSetupComplete: boolean;
   planApproved: boolean;
   hitlInterruptActive: boolean;
   hitlInterruptReason?: string;

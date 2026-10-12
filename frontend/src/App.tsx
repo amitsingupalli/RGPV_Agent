@@ -3,7 +3,6 @@ import {
   initialStudentProfile, 
   curriculumUnits, 
   pyqQuestions, 
-  initialScheduleDays, 
   traceNodes 
 } from './data/mockData';
 import { 
@@ -13,7 +12,8 @@ import {
   DaySchedule, 
   StudySession, 
   Topic, 
-  Language 
+  Language,
+  UploadedDocumentItem
 } from './types';
 import { Navbar } from './components/Navbar';
 import { DocumentIngestionHub } from './components/DocumentIngestionHub';
@@ -25,13 +25,157 @@ import { TopicExplainerDrawer } from './components/TopicExplainerDrawer';
 import { PdfCitationModal } from './components/PdfCitationModal';
 import { TracingModal } from './components/TracingModal';
 
+/**
+ * Dynamically build a day-by-day study schedule from user-entered parameters:
+ * - totalDays (from user's exam date / daysRemaining)
+ * - dailyHoursCap (user's daily study hour ceiling)
+ * - bufferDays (user's chosen number of revision buffer days)
+ * - units (with user's starting mastery level, e.g., 0%)
+ */
+function generateUserSchedule(
+  units: Unit[],
+  profile: StudentProfile
+): DaySchedule[] {
+  const allTopics = units.flatMap((u) => u.topics);
+  if (allTopics.length === 0) return [];
+
+  // Rank topics by priority formula: P_i = 0.35*F + 0.20*D + 0.25*S + 0.20*(100 - M)
+  const rankedTopics = [...allTopics]
+    .map((t) => {
+      const masteryDeficit = 100 - t.masteryPercentage;
+      const priority = Number(
+        (
+          0.35 * t.frequencyScore +
+          0.20 * t.difficultyScore +
+          0.25 * t.syllabusWeight +
+          0.20 * masteryDeficit
+        ).toFixed(1)
+      );
+      return { topic: t, priority, masteryDeficit };
+    })
+    .sort((a, b) => b.priority - a.priority);
+
+  const totalDays = Math.max(1, Math.min(60, profile.daysRemaining || 14));
+  const bufferCount = Math.min(profile.bufferDays, Math.max(0, totalDays - 1));
+  const dailyMinutesCap = Math.round(profile.dailyHoursCap * 60);
+
+  const today = new Date();
+  const days: DaySchedule[] = [];
+
+  for (let i = 1; i <= totalDays; i++) {
+    const dayDate = new Date(today);
+    dayDate.setDate(today.getDate() + (i - 1));
+    const dateStr = dayDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+    });
+
+    const isBufferDay = i > totalDays - bufferCount;
+    const rankedItem = rankedTopics[(i - 1) % rankedTopics.length];
+    const primaryTopic = rankedItem.topic;
+    const secondaryTopic = rankedTopics[i % rankedTopics.length].topic;
+
+    if (isBufferDay) {
+      const bufferMins = Math.min(dailyMinutesCap, 90);
+      days.push({
+        dayNumber: i,
+        date: `Day ${i} • ${dateStr}`,
+        totalMinutes: bufferMins,
+        isBufferDay: true,
+        priorityMetrics: {
+          frequency: 0,
+          difficulty: 0,
+          syllabusWeight: 0,
+          masteryDeficit: 0,
+          calculatedPriority: 0,
+          justification: [
+            `Reserved as a revision buffer day based on your preference (${bufferCount} buffer ${bufferCount === 1 ? 'day' : 'days'} selected).`,
+            'Use this day for catching up on unfinished topics or light formula review.',
+          ],
+        },
+        sessions: [
+          {
+            id: `s-${i}-1`,
+            type: 'buffer_rest',
+            title: `Revision & Catch-Up Block (${profile.subjectCode || 'Course'})`,
+            topicId: primaryTopic.id,
+            durationMinutes: Math.round(bufferMins * 0.6),
+            completed: false,
+          },
+          {
+            id: `s-${i}-2`,
+            type: 'spaced_revision',
+            title: `Past Paper Checklist & Weak Topic Review`,
+            topicId: secondaryTopic.id,
+            durationMinutes: Math.round(bufferMins * 0.4),
+            completed: false,
+          },
+        ],
+      });
+    } else {
+      const conceptMins = Math.round(dailyMinutesCap * 0.45);
+      const pyqMins = Math.round(dailyMinutesCap * 0.35);
+      const recallMins = Math.max(15, dailyMinutesCap - conceptMins - pyqMins);
+
+      days.push({
+        dayNumber: i,
+        date: `Day ${i} • ${dateStr}`,
+        totalMinutes: conceptMins + pyqMins + recallMins,
+        isBufferDay: false,
+        priorityMetrics: {
+          frequency: primaryTopic.frequencyScore,
+          difficulty: primaryTopic.difficultyScore,
+          syllabusWeight: primaryTopic.syllabusWeight,
+          masteryDeficit: rankedItem.masteryDeficit,
+          calculatedPriority: rankedItem.priority,
+          justification: [
+            `Appeared ${primaryTopic.appearancesCount}× in past papers (${primaryTopic.totalMarksInPast5Years} total marks).`,
+            `Current mastery is ${primaryTopic.masteryPercentage}% (deficit: ${rankedItem.masteryDeficit}%).`,
+            `Scheduled within your ${profile.dailyHoursCap} hrs/day limit (${profile.preferredStudySlot} slot).`,
+          ],
+        },
+        sessions: [
+          {
+            id: `s-${i}-1`,
+            type: 'concept_learning',
+            title: `${primaryTopic.title} — Core Concepts & Notes`,
+            topicId: primaryTopic.id,
+            durationMinutes: conceptMins,
+            completed: false,
+          },
+          {
+            id: `s-${i}-2`,
+            type: 'pyq_practice',
+            title: `Past Exam Questions Practice: ${primaryTopic.title}`,
+            topicId: primaryTopic.id,
+            durationMinutes: pyqMins,
+            completed: false,
+          },
+          {
+            id: `s-${i}-3`,
+            type: 'active_recall',
+            title: `Self-Check Quiz: ${secondaryTopic.title}`,
+            topicId: secondaryTopic.id,
+            durationMinutes: recallMins,
+            completed: false,
+          },
+        ],
+      });
+    }
+  }
+
+  return days;
+}
+
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  // New user starts on 'ingestion' (Step 1: Setup & Documents) with empty curriculum & 0 files
+  const [currentTab, setCurrentTab] = useState<string>('ingestion');
   const [profile, setProfile] = useState<StudentProfile>(initialStudentProfile);
-  const [units, setUnits] = useState<Unit[]>(curriculumUnits);
-  const [pyqs, setPyqs] = useState<PYQQuestion[]>(pyqQuestions);
-  const [scheduleDays, setScheduleDays] = useState<DaySchedule[]>(initialScheduleDays);
-  
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedDocumentItem[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [pyqs, setPyqs] = useState<PYQQuestion[]>([]);
+  const [scheduleDays, setScheduleDays] = useState<DaySchedule[]>([]);
+
   // Active topic for Study Room
   const [selectedTopicId, setSelectedTopicId] = useState<string>('topic-3-1');
 
@@ -45,9 +189,9 @@ export default function App() {
 
   // All topics flat array
   const allTopics = units.flatMap((u) => u.topics);
-  const currentTopic = allTopics.find((t) => t.id === selectedTopicId) || allTopics[0];
+  const currentTopic = allTopics.find((t) => t.id === selectedTopicId) || allTopics[0] || null;
 
-  // Handler to update student profile
+  // Update student profile
   const handleUpdateProfile = (updates: Partial<StudentProfile>) => {
     setProfile((prev) => ({ ...prev, ...updates }));
   };
@@ -57,13 +201,64 @@ export default function App() {
     setProfile((prev) => ({ ...prev, language: lang }));
   };
 
-  // Reassign PYQ question to another topic (Human in the Loop)
+  // Complete initial setup from DocumentIngestionHub
+  const handleCompleteIngestion = (
+    customUnitMastery?: Record<string, number>
+  ) => {
+    // Initialize units with user's chosen starting level (default 0% when starting from 0)
+    const initializedUnits: Unit[] = curriculumUnits.map((unit) => {
+      const unitBaseline =
+        profile.startingLevel === 'zero'
+          ? 0
+          : profile.startingLevel === 'basics'
+          ? 25
+          : customUnitMastery?.[unit.id] ?? 0;
+
+      return {
+        ...unit,
+        topics: unit.topics.map((topic) => ({
+          ...topic,
+          masteryPercentage: unitBaseline,
+        })),
+      };
+    });
+
+    const updatedProfile: StudentProfile = {
+      ...profile,
+      isSetupComplete: true,
+      planApproved: false,
+      hitlInterruptActive: true,
+      hitlInterruptReason: 'Review your extracted syllabus topics and approve your study schedule',
+    };
+
+    const generatedDays = generateUserSchedule(initializedUnits, updatedProfile);
+
+    setUnits(initializedUnits);
+    setPyqs(pyqQuestions);
+    setProfile(updatedProfile);
+    setScheduleDays(generatedDays);
+    if (initializedUnits[0]?.topics[0]) {
+      setSelectedTopicId(initializedUnits[0].topics[0].id);
+    }
+    setCurrentTab('syllabus');
+  };
+
+  // Reset entire app to 0 (New User State)
+  const handleResetToZero = () => {
+    setProfile(initialStudentProfile);
+    setUploadedFiles([]);
+    setUnits([]);
+    setPyqs([]);
+    setScheduleDays([]);
+    setCurrentTab('ingestion');
+  };
+
+  // Reassign PYQ question to another topic
   const handleReassignQuestion = (questionId: string, newTopicId: string) => {
     setPyqs((prev) =>
       prev.map((q) => (q.id === questionId ? { ...q, topicId: newTopicId } : q))
     );
 
-    // Update mappedPYQIds on the topics
     setUnits((prevUnits) =>
       prevUnits.map((u) => ({
         ...u,
@@ -90,14 +285,15 @@ export default function App() {
 
   // Update topic mastery
   const handleUpdateTopicMastery = (topicId: string, newMastery: number) => {
-    setUnits((prevUnits) =>
-      prevUnits.map((u) => ({
+    setUnits((prevUnits) => {
+      const nextUnits = prevUnits.map((u) => ({
         ...u,
         topics: u.topics.map((t) =>
           t.id === topicId ? { ...t, masteryPercentage: newMastery } : t
         ),
-      }))
-    );
+      }));
+      return nextUnits;
+    });
   };
 
   // Toggle study session completed
@@ -128,34 +324,27 @@ export default function App() {
   };
 
   // Adjust schedule constraints
-  const handleAdjustConstraints = (newCap: number, newTarget: number) => {
-    setProfile((prev) => ({
-      ...prev,
+  const handleAdjustConstraints = (
+    newCap: number,
+    newTarget: number,
+    newDaysRemaining?: number,
+    newBufferDays?: number
+  ) => {
+    const nextProfile: StudentProfile = {
+      ...profile,
       dailyHoursCap: newCap,
       targetScore: newTarget,
+      daysRemaining: newDaysRemaining ?? profile.daysRemaining,
+      bufferDays: newBufferDays ?? profile.bufferDays,
       planApproved: false,
       hitlInterruptActive: true,
-      hitlInterruptReason: 'Constraints Adjusted — Review Updated Schedule Prioritization',
-    }));
-
-    // Re-scale schedule days slightly to honor the cap
-    setScheduleDays((prev) =>
-      prev.map((d) => {
-        if (d.isBufferDay) return d;
-        const targetMinutes = Math.min(Math.round(newCap * 60), 240);
-        return {
-          ...d,
-          totalMinutes: targetMinutes,
-          sessions: d.sessions.map((s, idx) => ({
-            ...s,
-            durationMinutes: idx === 0 ? Math.round(targetMinutes * 0.35) : Math.round(targetMinutes * 0.22),
-          })),
-        };
-      })
-    );
+      hitlInterruptReason: 'Schedule updated with your new study hours and exam constraints — please review',
+    };
+    setProfile(nextProfile);
+    setScheduleDays(generateUserSchedule(units, nextProfile));
   };
 
-  // Trigger HITL appeal
+  // Trigger review flag
   const handleTriggerHitlAppeal = (reason: string) => {
     setProfile((prev) => ({
       ...prev,
@@ -173,12 +362,11 @@ export default function App() {
   // Open citation modal
   const handleOpenCitation = (cite: any) => {
     if (typeof cite === 'string') {
-      // Find from citations or generate excerpt
       setSelectedCitation({
         id: 'cite-ref',
-        docName: cite.split(',')[0] || 'Official RGPV Document',
+        docName: cite.split(',')[0] || 'Uploaded Course Document',
         page: parseInt(cite.match(/\d+/)?.[0] || '1', 10),
-        excerpt: 'Official question formulated as part of Rajiv Gandhi Proudyogiki Vishwavidyalaya CS-403 university examinations.',
+        excerpt: `Source reference from ${profile.subjectCode || 'university'} uploaded question bank / syllabus PDF.`,
         context: cite,
       });
     } else {
@@ -196,6 +384,7 @@ export default function App() {
         onLanguageChange={handleLanguageChange}
         profile={profile}
         onOpenTraces={() => setIsTracesOpen(true)}
+        onResetToZero={handleResetToZero}
       />
 
       {/* Main Viewport Container */}
@@ -203,19 +392,23 @@ export default function App() {
         {currentTab === 'dashboard' && (
           <AnalyticsDashboard
             units={units}
+            scheduleDays={scheduleDays}
             profile={profile}
-            traceNodes={traceNodes}
+            traceNodes={profile.isSetupComplete ? traceNodes : []}
             onSelectTopicForStudy={handleSelectTopicForStudy}
             onOpenTraces={() => setIsTracesOpen(true)}
             onOpenTimetable={() => setCurrentTab('timetable')}
+            onGoToSetup={() => setCurrentTab('ingestion')}
           />
         )}
 
         {currentTab === 'ingestion' && (
           <DocumentIngestionHub
             profile={profile}
+            files={uploadedFiles}
+            onUpdateFiles={setUploadedFiles}
             onUpdateProfile={handleUpdateProfile}
-            onCompleteIngestion={() => setCurrentTab('syllabus')}
+            onCompleteIngestion={handleCompleteIngestion}
           />
         )}
 
@@ -223,9 +416,12 @@ export default function App() {
           <SyllabusExplorer
             units={units}
             pyqs={pyqs}
+            profile={profile}
             onReassignQuestion={handleReassignQuestion}
             onSelectTopicForStudy={handleSelectTopicForStudy}
             onOpenCitation={handleOpenCitation}
+            onUpdateTopicMastery={handleUpdateTopicMastery}
+            onGoToSetup={() => setCurrentTab('ingestion')}
           />
         )}
 
@@ -241,6 +437,7 @@ export default function App() {
             }
             onSelectSessionForStudy={(topicId) => handleSelectTopicForStudy(topicId)}
             onToggleSessionComplete={handleToggleSessionComplete}
+            onGoToSetup={() => setCurrentTab('ingestion')}
           />
         )}
 
@@ -254,6 +451,7 @@ export default function App() {
             onOpenCitation={handleOpenCitation}
             onUpdateTopicMastery={handleUpdateTopicMastery}
             onTriggerHitlAppeal={handleTriggerHitlAppeal}
+            onGoToSetup={() => setCurrentTab('ingestion')}
           />
         )}
       </main>
@@ -265,17 +463,17 @@ export default function App() {
         onClose={() => setPriorityExplainerData(null)}
       />
 
-      {/* Verifiable PDF Source Citation Modal */}
+      {/* PDF Source Citation Modal */}
       <PdfCitationModal
         citation={selectedCitation}
         onClose={() => setSelectedCitation(null)}
       />
 
-      {/* LangGraph Agent Execution Tracing Modal */}
+      {/* System Execution Logs Modal */}
       <TracingModal
         isOpen={isTracesOpen}
         onClose={() => setIsTracesOpen(false)}
-        traceNodes={traceNodes}
+        traceNodes={profile.isSetupComplete ? traceNodes : []}
       />
     </div>
   );

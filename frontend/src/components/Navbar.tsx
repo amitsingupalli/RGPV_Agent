@@ -1,16 +1,13 @@
 import React from 'react';
 import { 
-  Sparkles, 
   Terminal, 
-  Clock, 
-  AlertCircle, 
-  Globe, 
   BookMarked, 
   Calendar, 
   Layers, 
   BarChart3, 
   FileCheck,
-  CheckCircle2
+  RotateCcw,
+  User
 } from 'lucide-react';
 import { Language, StudentProfile } from '../types';
 
@@ -21,6 +18,7 @@ interface NavbarProps {
   onLanguageChange: (lang: Language) => void;
   profile: StudentProfile;
   onOpenTraces: () => void;
+  onResetToZero?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -29,40 +27,41 @@ export const Navbar: React.FC<NavbarProps> = ({
   language,
   onLanguageChange,
   profile,
-  onOpenTraces
+  onOpenTraces,
+  onResetToZero
 }) => {
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-    { id: 'ingestion', label: 'Documents & Ingestion', icon: FileCheck },
-    { id: 'syllabus', label: 'Curriculum & PYQs', icon: Layers },
-    { id: 'timetable', label: 'Study Timetable', icon: Calendar, badge: profile.planApproved ? undefined : 'Review' },
-    { id: 'studyroom', label: 'Active Study Room', icon: BookMarked },
+    { id: 'ingestion', label: '1. Setup & Documents', icon: FileCheck, badge: !profile.isSetupComplete ? 'Start Here' : undefined },
+    { id: 'syllabus', label: '2. Syllabus & PYQs', icon: Layers },
+    { id: 'timetable', label: '3. Study Plan', icon: Calendar, badge: profile.isSetupComplete && !profile.planApproved ? 'Review' : undefined },
+    { id: 'studyroom', label: '4. Study Room', icon: BookMarked },
+    { id: 'dashboard', label: '5. Progress', icon: BarChart3 },
   ];
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#27272a] bg-[#09090b]/90 backdrop-blur-md">
-      {/* Human In The Loop Interrupt Notification Ribbon (if active) */}
-      {profile.hitlInterruptActive && !profile.planApproved && (
+      {/* Review Notification Ribbon (only active after setup when a plan needs approval) */}
+      {profile.isSetupComplete && profile.hitlInterruptActive && !profile.planApproved && (
         <div className="bg-amber-950/60 border-b border-amber-500/30 px-4 py-1.5 flex items-center justify-between text-xs text-amber-200">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
             </span>
-            <span className="font-medium">Human-in-the-Loop Interrupt Active:</span>
+            <span className="font-medium">Action Needed:</span>
             <span className="text-amber-300/90">{profile.hitlInterruptReason}</span>
           </div>
           <button 
             onClick={() => onTabChange('timetable')}
             className="text-xs px-2.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition-colors font-medium cursor-pointer"
           >
-            Review Timetable Constraints &rarr;
+            Review Schedule &rarr;
           </button>
         </div>
       )}
 
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-        {/* Zone 1: Brand Wordmark & Subject Identifier */}
+        {/* Zone 1: Brand Wordmark & Dynamic Student Course Info */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-500/20">
@@ -70,24 +69,51 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <div className="flex items-baseline gap-2">
               <span className="font-bold text-base tracking-tight text-white">
-                RGPV-Agent
+                RGPV Prep
               </span>
-              <span className="hidden sm:inline-block text-xs font-mono text-zinc-400">
-                CS-403 DBMS
-              </span>
+              {profile.subjectCode ? (
+                <span className="hidden sm:inline-block text-xs font-mono text-indigo-400">
+                  {profile.subjectCode}
+                </span>
+              ) : (
+                <span className="hidden sm:inline-block text-xs font-mono text-zinc-500">
+                  No Subject Set
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-zinc-800 text-xs text-zinc-400">
-            <span>B.Tech CSE</span>
-            <span aria-hidden="true" className="text-zinc-600">·</span>
-            <span>Sem IV</span>
-            <span aria-hidden="true" className="text-zinc-600">·</span>
-            <span className="text-emerald-400 font-mono">12 Days to Exam</span>
-          </div>
+          {profile.isSetupComplete ? (
+            <div className="hidden xl:flex items-center gap-2 pl-3 border-l border-zinc-800 text-xs text-zinc-400">
+              {profile.studentName && (
+                <>
+                  <span className="flex items-center gap-1 text-zinc-200 font-medium">
+                    <User className="w-3 h-3 text-indigo-400" />
+                    {profile.studentName}
+                  </span>
+                  <span aria-hidden="true" className="text-zinc-600">·</span>
+                </>
+              )}
+              <span>{profile.program || 'Degree'} {profile.branch ? `(${profile.branch})` : ''}</span>
+              {profile.semester && (
+                <>
+                  <span aria-hidden="true" className="text-zinc-600">·</span>
+                  <span>{profile.semester}</span>
+                </>
+              )}
+              <span aria-hidden="true" className="text-zinc-600">·</span>
+              <span className="text-emerald-400 font-mono">
+                {profile.daysRemaining} {profile.daysRemaining === 1 ? 'Day' : 'Days'} Left
+              </span>
+            </div>
+          ) : (
+            <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-zinc-800 text-xs text-amber-400/90 font-mono">
+              <span>Step 1: Enter your course &amp; exam details</span>
+            </div>
+          )}
         </div>
 
-        {/* Zone 2: Navigation Links (Single-Line, Text with Active States) */}
+        {/* Zone 2: Navigation Links */}
         <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -114,8 +140,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </nav>
 
-        {/* Zone 3: Primary Actions (Language, Traces, Countdown) */}
-        <div className="flex items-center gap-2.5">
+        {/* Zone 3: Language, Target Score & Reset */}
+        <div className="flex items-center gap-2">
           {/* Bilingual Language Switcher Toggle */}
           <div className="flex items-center p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs">
             <button
@@ -125,7 +151,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-zinc-800 text-white shadow-xs font-semibold' 
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
-              title="English Pedagogical Content"
+              title="English Notes"
             >
               EN
             </button>
@@ -136,27 +162,43 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'bg-indigo-600/30 text-indigo-300 font-semibold border border-indigo-500/30' 
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
-              title="Hinglish Real-World Explanations"
+              title="Hinglish Notes"
             >
               Hinglish
             </button>
           </div>
 
-          {/* Execution Tracing Modal Trigger */}
+          {/* Pipeline Logs Button */}
           <button
             onClick={onOpenTraces}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 transition-colors cursor-pointer"
-            title="View LangGraph Agent Execution Traces"
+            title="View System Logs"
           >
             <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">Telemetry</span>
+            <span className="hidden sm:inline">Logs</span>
           </button>
 
-          {/* Target Score Chip */}
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 font-mono text-xs">
-            <span className="text-zinc-500">Target:</span>
-            <span className="font-semibold text-emerald-400">{profile.targetScore}/100</span>
-          </div>
+          {/* Target Score Chip (only shown after user configures it) */}
+          {profile.isSetupComplete && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 font-mono text-xs">
+              <span className="text-zinc-500">Goal:</span>
+              <span className="font-semibold text-emerald-400">
+                {profile.targetScore}/{profile.maxExamMarks}
+              </span>
+            </div>
+          )}
+
+          {/* Reset to Zero Button */}
+          {onResetToZero && profile.isSetupComplete && (
+            <button
+              onClick={onResetToZero}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-rose-950/40 border border-zinc-800 hover:border-rose-500/30 text-xs text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer"
+              title="Reset everything back to 0 (New User State)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Reset</span>
+            </button>
+          )}
         </div>
       </div>
 
