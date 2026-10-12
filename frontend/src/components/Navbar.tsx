@@ -1,6 +1,5 @@
 import React from 'react';
 import { 
-  Terminal, 
   BookMarked, 
   Calendar, 
   Layers, 
@@ -167,16 +166,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               Hinglish
             </button>
           </div>
-
-          {/* Pipeline Logs Button */}
-          <button
-            onClick={onOpenTraces}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 transition-colors cursor-pointer"
-            title="View System Logs"
-          >
-            <Terminal className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">Logs</span>
-          </button>
 
           {/* Target Score Chip (only shown after user configures it) */}
           {profile.isSetupComplete && (

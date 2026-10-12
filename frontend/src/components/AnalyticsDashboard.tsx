@@ -3,7 +3,6 @@ import {
   Clock, 
   AlertTriangle, 
   ArrowRight, 
-  Terminal, 
   Layers,
   FileCheck
 } from 'lucide-react';
@@ -338,27 +337,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Bottom Section: Pipeline Processing Summary */}
-      {traceNodes.length > 0 && (
-        <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-5 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-indigo-400" />
-              <h2 className="text-xs font-semibold text-zinc-200">
-                Pipeline Processing Steps
-              </h2>
-            </div>
-            <button
-              onClick={onOpenTraces}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-mono flex items-center gap-1 cursor-pointer"
-            >
-              <span>Inspect Step Logs</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
