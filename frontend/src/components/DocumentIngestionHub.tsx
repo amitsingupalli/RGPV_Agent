@@ -17,17 +17,23 @@ import {
   StudentProfile, 
   UploadedDocumentItem, 
   StudyTimeSlot, 
-  StartingPreparationLevel 
+  StartingPreparationLevel,
+  Unit,
+  PYQQuestion
 } from '../types';
 import { getCurriculumForSubject } from '../data/subjectCurriculumEngine';
 import { getSubjectsForBranchAndSemester } from '../data/rgpvSubjectCatalog';
+import { fetchAICurriculumForSubject } from '../services/aiService';
 
 interface DocumentIngestionHubProps {
   profile: StudentProfile;
   files: UploadedDocumentItem[];
   onUpdateFiles: React.Dispatch<React.SetStateAction<UploadedDocumentItem[]>>;
   onUpdateProfile: (updates: Partial<StudentProfile>) => void;
-  onCompleteIngestion: (customUnitMastery?: Record<string, number>) => void;
+  onCompleteIngestion: (
+    customUnitMastery?: Record<string, number>,
+    aiGeneratedCurriculum?: { units: Unit[]; pyqs: PYQQuestion[] }
+  ) => void;
 }
 
 export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
@@ -153,7 +159,7 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
     onUpdateFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
-  const handleStartExtraction = () => {
+  const handleStartExtraction = async () => {
     // Validate required user inputs so we never assume missing fields
     if (!profile.program.trim() || !profile.branch.trim() || !profile.semester.trim()) {
       setValidationError('Please select your Program, Branch, and Semester before continuing.');
@@ -168,32 +174,41 @@ export const DocumentIngestionHub: React.FC<DocumentIngestionHubProps> = ({
     setIsExtracting(true);
     const totalPages = files.reduce((acc, f) => acc + f.pages, 0);
 
-    setExtractionProgress(15);
+    setExtractionProgress(20);
     setExtractionStageText(
       files.length > 0
-        ? `Reading ${files.length} uploaded document(s) (${totalPages} pages)...`
-        : `Loading built-in RGPV syllabus & past papers for ${profile.subjectCode} (${profile.subjectName})...`
+        ? `Analyzing ${files.length} uploaded document(s) (${totalPages} pages) with Gemini AI...`
+        : `Generating 5-Unit RGPV Syllabus, Theory & Numericals for ${profile.subjectCode} (${profile.subjectName}) via Gemini AI...`
     );
 
-    setTimeout(() => {
-      setExtractionProgress(45);
-      setExtractionStageText(`Extracting syllabus units & past exam questions for ${profile.subjectCode}...`);
-    }, 500);
+    const progressTimer = setInterval(() => {
+      setExtractionProgress((prev) => (prev < 88 ? prev + 8 : prev));
+    }, 600);
 
-    setTimeout(() => {
-      setExtractionProgress(80);
-      setExtractionStageText(
-        `Building ${profile.daysRemaining}-day schedule (${profile.dailyHoursCap} hrs/day cap, ${profile.bufferDays} buffer days)...`
-      );
-    }, 1100);
+    const baselineMastery =
+      profile.startingLevel === 'zero'
+        ? 0
+        : profile.startingLevel === 'basics'
+        ? 25
+        : 0;
 
-    setTimeout(() => {
-      setExtractionProgress(100);
-      setIsExtracting(false);
-      onCompleteIngestion(
-        profile.startingLevel === 'custom' ? customUnitMastery : undefined
-      );
-    }, 1600);
+    const aiCurriculum = await fetchAICurriculumForSubject({
+      branch: profile.branch,
+      semester: profile.semester,
+      subjectCode: profile.subjectCode,
+      subjectName: profile.subjectName,
+      uploadedFiles: files.map((f) => f.name),
+      startingMastery: baselineMastery,
+      customUnitMastery: profile.startingLevel === 'custom' ? customUnitMastery : undefined,
+    });
+
+    clearInterval(progressTimer);
+    setExtractionProgress(100);
+    setIsExtracting(false);
+    onCompleteIngestion(
+      profile.startingLevel === 'custom' ? customUnitMastery : undefined,
+      aiCurriculum || undefined
+    );
   };
 
   return (

@@ -24,10 +24,12 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual Environment & Secrets
 .env
 .env.local
 .env.*.local
+env.txt
+**/env.txt
 
 # IDEs
 .idea/

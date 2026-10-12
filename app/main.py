@@ -8,6 +8,7 @@ from app.api.documents import router as documents_router
 from app.api.plans import router as plans_router
 from app.api.quizzes import router as quizzes_router
 from app.api.progress import router as progress_router
+from app.api.ai_copilot import router as ai_copilot_router
 
 settings = get_settings()
 
@@ -44,6 +45,7 @@ app.include_router(documents_router, prefix=settings.API_PREFIX)
 app.include_router(plans_router, prefix=settings.API_PREFIX)
 app.include_router(quizzes_router, prefix=settings.API_PREFIX)
 app.include_router(progress_router, prefix=settings.API_PREFIX)
+app.include_router(ai_copilot_router, prefix=settings.API_PREFIX)
 
 
 @app.get("/")
