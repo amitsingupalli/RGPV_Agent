@@ -4,7 +4,7 @@ import re
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from fastapi import APIRouter
 from pydantic import BaseModel
 import time
@@ -55,21 +55,16 @@ def load_gemini_api_keys() -> List[str]:
     return keys
 
 
-def call_gemini_json(
+def execute_gemini_raw(
     prompt: str,
-    timeout_sec: int = 12,
-    phase: str = "general",
-    run_id: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
-    """Call Google Gemini API with observability instrumentation, latency tracking, and cost logging."""
-    keys = load_gemini_api_keys()
-    if not keys:
-        return None
-
-    call_run_id = run_id or f"run_{uuid.uuid4().hex[:8]}"
-    start_time = time.time()
-    input_tokens = ObservabilityTracker.estimate_tokens(prompt)
-
+    model_name: str,
+    api_key: str,
+    timeout_sec: int = 25
+) -> Tuple[Optional[str], int, Optional[str]]:
+    """Makes a single HTTP POST to Google Gemini API.
+    Returns (raw_text, latency_ms, error_message).
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
@@ -78,72 +73,373 @@ def call_gemini_json(
         },
     }
     data_bytes = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data_bytes,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    start_time = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+            latency_ms = int((time.time() - start_time) * 1000)
+            body = json.loads(resp.read().decode("utf-8"))
+            candidates = body.get("candidates", [])
+            if not candidates:
+                return None, latency_ms, "No candidates returned by model"
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text_out = "".join(p.get("text", "") for p in parts).strip()
+            text_out = re.sub(r"^```(?:json)?\s*", "", text_out)
+            text_out = re.sub(r"\s*```$", "", text_out).strip()
+            return text_out, latency_ms, None
+    except urllib.error.HTTPError as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return None, latency_ms, f"HTTPError {e.code}: {e.reason}"
+    except Exception as err:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return None, latency_ms, str(err)
 
-    for model_name in GEMINI_MODELS[:2]:
-        for api_key in keys[:2]:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-            req = urllib.request.Request(
-                url,
-                data=data_bytes,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-                    latency_ms = int((time.time() - start_time) * 1000)
-                    body = json.loads(resp.read().decode("utf-8"))
-                    candidates = body.get("candidates", [])
-                    if not candidates:
-                        continue
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    text_out = ""
-                    for p in parts:
-                        if "text" in p:
-                            text_out += p["text"]
-                    text_out = text_out.strip()
-                    text_out = re.sub(r"^```(?:json)?\s*", "", text_out)
-                    text_out = re.sub(r"\s*```$", "", text_out)
-                    parsed_json = json.loads(text_out)
 
-                    output_tokens = ObservabilityTracker.estimate_tokens(text_out)
-                    cost_usd = ObservabilityTracker.calculate_cost(input_tokens, output_tokens, model_name)
+def execute_gemini_for_model(
+    prompt: str,
+    model_name: str,
+    keys: List[str],
+    timeout_sec: int = 25
+) -> Tuple[Optional[str], int, Optional[str]]:
+    """Tries available keys for the specified model until one succeeds or all fail."""
+    last_err = None
+    last_lat = 0
+    for key in keys[:2]:
+        text_out, lat_ms, err = execute_gemini_raw(prompt, model_name, key, timeout_sec=timeout_sec)
+        last_lat = lat_ms
+        if text_out is not None and not err:
+            return text_out, lat_ms, None
+        last_err = err
+        if err and any(c in err for c in ["401", "403", "429"]):
+            continue
+        break
+    return None, last_lat, last_err
 
-                    # Log successful model invocation
+
+SchemaValidator = Callable[[Dict[str, Any]], Tuple[bool, Optional[str]]]
+
+
+def validate_grading_schema(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """Strict schema validator for student answer evaluation."""
+    if not isinstance(data, dict):
+        return False, "Evaluation output must be a JSON object"
+    if "score" not in data:
+        return False, "Missing 'score' field in evaluation"
+    if "rubrics" not in data or not isinstance(data["rubrics"], list) or len(data["rubrics"]) == 0:
+        return False, "Missing or non-array 'rubrics' in evaluation"
+    for idx, r in enumerate(data["rubrics"]):
+        if not isinstance(r, dict):
+            return False, f"Rubric item {idx} must be a dict"
+        if "allocatedMarks" not in r or "awardedMarks" not in r:
+            return False, f"Rubric item {idx} missing mark allocations"
+    return True, None
+
+
+def validate_learn_topic_schema(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """Strict schema validator for study guide topic generation."""
+    if not isinstance(data, dict):
+        return False, "Topic study output must be a JSON object"
+    if "coreDefinition" not in data or not isinstance(data["coreDefinition"], dict):
+        return False, "Missing 'coreDefinition' object"
+    if "en" not in data["coreDefinition"]:
+        return False, "Missing English 'en' in coreDefinition"
+    return True, None
+
+
+def validate_curriculum_schema(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """Strict schema validator for syllabus curriculum extraction."""
+    if not isinstance(data, dict):
+        return False, "Curriculum output must be a JSON object"
+    if "units" not in data or not isinstance(data["units"], list) or len(data["units"]) == 0:
+        return False, "Missing or empty 'units' list in curriculum"
+    return True, None
+
+
+def call_gemini_json_with_retry_and_fallback(
+    prompt: str,
+    phase: str = "general",
+    schema_validator: Optional[SchemaValidator] = None,
+    timeout_sec: int = 25,
+    run_id: Optional[str] = None
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    """Executes resilient multi-attempt LLM invocation policy:
+      Attempt 1: Primary Model (e.g. gemini-3.5-flash-lite)
+        ↓ schema validation
+      Attempt 2: Same Model with detailed validation error feedback in prompt
+        ↓
+      Attempt 3: Fallback Model (e.g. gemini-3.5-flash)
+        ↓
+      Degraded Mode: Return graceful notice and route to human review
+    """
+    keys = load_gemini_api_keys()
+    call_run_id = run_id or f"run_{uuid.uuid4().hex[:8]}"
+
+    if not keys:
+        return None, {
+            "status": "degraded",
+            "attempts": 0,
+            "model": "none",
+            "run_id": call_run_id,
+            "needs_human_review": True,
+            "student_notice": "Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric.",
+            "error": "No API keys configured."
+        }
+
+    primary_model = GEMINI_MODELS[0]
+    fallback_model = GEMINI_MODELS[1] if len(GEMINI_MODELS) > 1 else GEMINI_MODELS[0]
+
+    # --- ATTEMPT 1: Primary Model ---
+    in_tok_1 = ObservabilityTracker.estimate_tokens(prompt)
+    raw_1, lat_1, err_1 = execute_gemini_for_model(prompt, primary_model, keys, timeout_sec)
+
+    v_err_1 = None
+    if raw_1 and not err_1:
+        try:
+            parsed_1 = json.loads(raw_1)
+            out_tok_1 = ObservabilityTracker.estimate_tokens(raw_1)
+            cost_1 = ObservabilityTracker.calculate_cost(in_tok_1, out_tok_1, primary_model)
+
+            if schema_validator:
+                is_valid, v_err = schema_validator(parsed_1)
+                if is_valid:
                     ObservabilityTracker.log_call(ModelCallRecord(
                         run_id=call_run_id,
                         phase=phase,
-                        model=model_name,
-                        latency_ms=latency_ms,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
+                        model=primary_model,
+                        latency_ms=lat_1,
+                        input_tokens=in_tok_1,
+                        output_tokens=out_tok_1,
                         schema_valid=True,
                         verifier_status="passed",
-                        cost_usd=cost_usd,
+                        cost_usd=cost_1,
                         safety_blocked=False
                     ))
-                    return parsed_json
-            except urllib.error.HTTPError as e:
-                if e.code in (401, 403, 429):
-                    continue
-                break
-            except Exception as err:
-                latency_ms = int((time.time() - start_time) * 1000)
+                    return parsed_1, {
+                        "status": "success",
+                        "attempts": 1,
+                        "model": primary_model,
+                        "run_id": call_run_id
+                    }
+                else:
+                    v_err_1 = v_err or "Output rejected by schema validator"
+            else:
                 ObservabilityTracker.log_call(ModelCallRecord(
                     run_id=call_run_id,
                     phase=phase,
-                    model=model_name,
-                    latency_ms=latency_ms,
-                    input_tokens=input_tokens,
-                    output_tokens=0,
-                    schema_valid=False,
-                    verifier_status="rejected",
-                    cost_usd=0.0,
-                    safety_blocked=False,
-                    error=str(err)
+                    model=primary_model,
+                    latency_ms=lat_1,
+                    input_tokens=in_tok_1,
+                    output_tokens=out_tok_1,
+                    schema_valid=True,
+                    verifier_status="passed",
+                    cost_usd=cost_1,
+                    safety_blocked=False
                 ))
-                continue
+                return parsed_1, {
+                    "status": "success",
+                    "attempts": 1,
+                    "model": primary_model,
+                    "run_id": call_run_id
+                }
+        except Exception as j_err:
+            v_err_1 = f"JSON parse error: {j_err}"
+    else:
+        v_err_1 = err_1 or "Empty response received on Attempt 1"
 
-    return None
+    # Log Attempt 1 failure & record retry
+    ObservabilityTracker.record_retry()
+    ObservabilityTracker.log_call(ModelCallRecord(
+        run_id=call_run_id,
+        phase=phase,
+        model=primary_model,
+        latency_ms=lat_1,
+        input_tokens=in_tok_1,
+        output_tokens=0,
+        schema_valid=False,
+        verifier_status="rejected",
+        cost_usd=0.0,
+        safety_blocked=False,
+        error=f"Attempt 1 failed: {v_err_1}"
+    ))
+
+    # --- ATTEMPT 2: Primary Model with Validation Error Feedback in Prompt ---
+    retry_prompt = (
+        f"{prompt}\n\n"
+        f"=== REPAIR INSTRUCTION (ATTEMPT 2) ===\n"
+        f"Your previous output failed automated validation with error:\n"
+        f"\"{v_err_1}\"\n"
+        f"Fix this immediately. You must return strictly valid JSON matching the exact schema without markdown backticks or commentary.\n"
+        f"=== END REPAIR INSTRUCTION ==="
+    )
+    in_tok_2 = ObservabilityTracker.estimate_tokens(retry_prompt)
+    raw_2, lat_2, err_2 = execute_gemini_for_model(retry_prompt, primary_model, keys, timeout_sec)
+
+    v_err_2 = None
+    if raw_2 and not err_2:
+        try:
+            parsed_2 = json.loads(raw_2)
+            out_tok_2 = ObservabilityTracker.estimate_tokens(raw_2)
+            cost_2 = ObservabilityTracker.calculate_cost(in_tok_2, out_tok_2, primary_model)
+
+            if schema_validator:
+                is_valid_2, v_err2 = schema_validator(parsed_2)
+                if is_valid_2:
+                    ObservabilityTracker.log_call(ModelCallRecord(
+                        run_id=call_run_id,
+                        phase=phase,
+                        model=primary_model,
+                        latency_ms=lat_2,
+                        input_tokens=in_tok_2,
+                        output_tokens=out_tok_2,
+                        schema_valid=True,
+                        verifier_status="passed",
+                        cost_usd=cost_2,
+                        safety_blocked=False
+                    ))
+                    return parsed_2, {
+                        "status": "retry_success",
+                        "attempts": 2,
+                        "model": primary_model,
+                        "run_id": call_run_id
+                    }
+                else:
+                    v_err_2 = v_err2 or "Attempt 2 schema validation failed"
+            else:
+                ObservabilityTracker.log_call(ModelCallRecord(
+                    run_id=call_run_id,
+                    phase=phase,
+                    model=primary_model,
+                    latency_ms=lat_2,
+                    input_tokens=in_tok_2,
+                    output_tokens=out_tok_2,
+                    schema_valid=True,
+                    verifier_status="passed",
+                    cost_usd=cost_2,
+                    safety_blocked=False
+                ))
+                return parsed_2, {
+                    "status": "retry_success",
+                    "attempts": 2,
+                    "model": primary_model,
+                    "run_id": call_run_id
+                }
+        except Exception as j_err2:
+            v_err_2 = f"Attempt 2 JSON parse error: {j_err2}"
+    else:
+        v_err_2 = err_2 or "Empty response on Attempt 2"
+
+    ObservabilityTracker.record_retry()
+    ObservabilityTracker.log_call(ModelCallRecord(
+        run_id=call_run_id,
+        phase=phase,
+        model=primary_model,
+        latency_ms=lat_2,
+        input_tokens=in_tok_2,
+        output_tokens=0,
+        schema_valid=False,
+        verifier_status="rejected",
+        cost_usd=0.0,
+        safety_blocked=False,
+        error=f"Attempt 2 failed: {v_err_2}"
+    ))
+
+    # --- ATTEMPT 3: Fallback Model ---
+    raw_3, lat_3, err_3 = execute_gemini_for_model(prompt, fallback_model, keys, timeout_sec)
+    lat_fallback = lat_3
+    if raw_3 and not err_3:
+        try:
+            parsed_3 = json.loads(raw_3)
+            out_tok_3 = ObservabilityTracker.estimate_tokens(raw_3)
+            cost_3 = ObservabilityTracker.calculate_cost(in_tok_1, out_tok_3, fallback_model)
+
+            if schema_validator:
+                is_valid_3, _ = schema_validator(parsed_3)
+                if is_valid_3:
+                    ObservabilityTracker.log_call(ModelCallRecord(
+                        run_id=call_run_id,
+                        phase=phase,
+                        model=fallback_model,
+                        latency_ms=lat_3,
+                        input_tokens=in_tok_1,
+                        output_tokens=out_tok_3,
+                        schema_valid=True,
+                        verifier_status="passed",
+                        cost_usd=cost_3,
+                        safety_blocked=False
+                    ))
+                    return parsed_3, {
+                        "status": "fallback_success",
+                        "attempts": 3,
+                        "model": fallback_model,
+                        "run_id": call_run_id
+                    }
+            else:
+                ObservabilityTracker.log_call(ModelCallRecord(
+                    run_id=call_run_id,
+                    phase=phase,
+                    model=fallback_model,
+                    latency_ms=lat_3,
+                    input_tokens=in_tok_1,
+                    output_tokens=out_tok_3,
+                    schema_valid=True,
+                    verifier_status="passed",
+                    cost_usd=cost_3,
+                    safety_blocked=False
+                ))
+                return parsed_3, {
+                    "status": "fallback_success",
+                    "attempts": 3,
+                    "model": fallback_model,
+                    "run_id": call_run_id
+                }
+        except Exception:
+            pass
+
+    # --- DEGRADED MODE & HUMAN REVIEW ---
+    ObservabilityTracker.log_call(ModelCallRecord(
+        run_id=call_run_id,
+        phase=phase,
+        model=fallback_model,
+        latency_ms=lat_fallback,
+        input_tokens=in_tok_1,
+        output_tokens=0,
+        schema_valid=False,
+        verifier_status="rejected",
+        cost_usd=0.0,
+        safety_blocked=False,
+        error="All retries and fallback models exhausted; degraded mode activated."
+    ))
+
+    return None, {
+        "status": "degraded",
+        "attempts": 3,
+        "model": fallback_model,
+        "run_id": call_run_id,
+        "needs_human_review": True,
+        "error": "Automated generation failed schema verification across all attempts.",
+        "student_notice": "Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric."
+    }
+
+
+def call_gemini_json(
+    prompt: str,
+    timeout_sec: int = 25,
+    phase: str = "general",
+    run_id: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Backward-compatible helper that invokes retry and fallback pipeline."""
+    result, _ = call_gemini_json_with_retry_and_fallback(
+        prompt=prompt,
+        phase=phase,
+        timeout_sec=timeout_sec,
+        run_id=run_id
+    )
+    return result
 
 
 # ============================================================================
@@ -272,7 +568,12 @@ Return strictly valid JSON with this exact structure:
   ]
 }}"""
 
-    result = call_gemini_json(prompt, timeout_sec=35)
+    result, status_info = call_gemini_json_with_retry_and_fallback(
+        prompt=prompt,
+        phase="curriculum_extraction",
+        schema_validator=validate_curriculum_schema,
+        timeout_sec=35
+    )
     if result and "units" in result and isinstance(result["units"], list) and len(result["units"]) > 0:
         return {
             "source": "gemini_llm",
@@ -280,6 +581,7 @@ Return strictly valid JSON with this exact structure:
             "status_label": "Official RGPV Scheme Ground-Truth Augmented" if approved_ground_truth else "AI-Generated Draft",
             "disclaimer": "AI-Generated Draft: Review against official RGPV scheme before final exams.",
             "requires_user_confirmation": True,
+            "run_id": status_info.get("run_id"),
             "data": result
         }
 
@@ -452,17 +754,79 @@ Return strictly valid JSON with this exact schema:
   }}
 }}"""
 
-    result = call_gemini_json(prompt, timeout_sec=30)
+    result, status_info = call_gemini_json_with_retry_and_fallback(
+        prompt=prompt,
+        phase="learn_topic",
+        schema_validator=validate_learn_topic_schema,
+        timeout_sec=30
+    )
     if result and "coreDefinition" in result:
         return {
             "source": "gemini_llm",
             "guardrail_status": "passed",
             "is_ai_draft": True,
             "disclaimer": "AI-Generated Draft: Review against official RGPV scheme before final exams.",
+            "run_id": status_info.get("run_id"),
             "data": result
         }
 
-    return {"source": "fallback", "is_ai_draft": True, "data": None}
+    return {
+        "source": "degraded_fallback",
+        "guardrail_status": "degraded",
+        "is_ai_draft": True,
+        "notice": "Live AI generation is temporarily unavailable. Standard curriculum model answer provided.",
+        "data": {
+            "typicalQuestion": f"Explain the fundamental concepts, governing formulas, and applications of {req.topicTitle}.",
+            "standardMarks": 7,
+            "rubricHighlight": "2M Theory + 2M Diagram + 3M Application",
+            "coreDefinition": {
+                "en": f"Comprehensive study guide for {req.topicTitle} under subject {req.subjectName} ({req.subjectCode}). Live AI generation is currently in degraded fallback mode.",
+                "hi": f"{req.topicTitle} ke mukhya engineering concepts aur syllabus points."
+            },
+            "theoryBulletPoints": [
+                f"Core definition and governing equations for {req.topicTitle}.",
+                f"Syllabus scope according to official RGPV B.Tech guidelines.",
+                "Standard engineering assumptions and derivations.",
+                "Practical applications and industrial context."
+            ],
+            "analogy": {
+                "title": f"System Representation of {req.topicTitle}",
+                "en": "Fundamental engineering system operation.",
+                "hi": "Pramukh engineering functioning."
+            },
+            "workedExample": {
+                "problemStatement": f"Standard numerical or derivation problem for {req.topicTitle}",
+                "stepByStepSolution": [
+                    {
+                        "step": 1,
+                        "title": "Problem Formulation & Parameters",
+                        "content": "Identify given parameters and apply standard equations.",
+                        "codeSnippet": "Standard formula representation"
+                    }
+                ]
+            },
+            "diagramBlueprint": {
+                "title": f"{req.topicTitle} Architecture & Process Flow",
+                "caption": "Standard schematic diagram for RGPV university exam sheets.",
+                "examDrawingTip": "Draw clear labeled blocks with inputs on left and outputs on right.",
+                "referenceUrl": f"https://en.wikipedia.org/wiki/Special:Search?search={urllib.parse.quote(req.topicTitle)}",
+                "referenceLabel": "Engineering Reference",
+                "nodes": [
+                    {"step": "Input", "label": "Initial Stage", "sub": "Raw input parameters"},
+                    {"step": "Process", "label": "Transformation Core", "sub": "Governing physical law"},
+                    {"step": "Output", "label": "Verified Result", "sub": "Final state"}
+                ],
+                "doList": [
+                    "State the governing law and SI units clearly.",
+                    "Include clean labeled block diagrams."
+                ],
+                "dontList": [
+                    "Do NOT skip steps in mathematical derivations.",
+                    "Do NOT forget to state physical assumptions."
+                ]
+            }
+        }
+    }
 
 
 @router.post("/ai/evaluate-answer")
@@ -551,7 +915,12 @@ Return strictly valid JSON with this exact schema:
   ]
 }}"""
 
-    result = call_gemini_json(prompt, timeout_sec=25)
+    result, status_info = call_gemini_json_with_retry_and_fallback(
+        prompt=prompt,
+        phase="exam_room",
+        schema_validator=validate_grading_schema,
+        timeout_sec=25
+    )
     if result and "rubrics" in result and "score" in result:
         # Enforce Verifier Shield Guardrail on LLM Output
         clamped_score, validated_rubrics, verifier_shield, audit_notes = (
@@ -579,6 +948,7 @@ Return strictly valid JSON with this exact schema:
         result["needs_human_review"] = needs_human_review
         result["review_reason"] = review_reason
         result["audit_notes"] = audit_notes
+        result["run_id"] = status_info.get("run_id")
 
         return {
             "source": "gemini_llm",
@@ -588,7 +958,56 @@ Return strictly valid JSON with this exact schema:
             "data": result
         }
 
-    return {"source": "fallback", "is_ai_draft": True, "data": None}
+    # Degraded fail-safe return per prompt requirement:
+    # "Do not silently show a broken answer. If grading fails, show:
+    # Your answer was saved, but automatic grading is temporarily unavailable.
+    # Please review the model answer and rubric."
+    return {
+        "source": "degraded_fallback",
+        "guardrail_status": "degraded",
+        "is_ai_draft": True,
+        "notice": "Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric.",
+        "data": {
+            "score": None,
+            "total_marks": req.totalMarks,
+            "degraded_mode": True,
+            "needs_human_review": True,
+            "review_reason": "Automated grading temporarily unavailable. Submission routed for manual human review.",
+            "student_notice": "Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric.",
+            "rubrics": [
+                {
+                    "id": "r-manual-1",
+                    "criterion": "Technical Accuracy & Definitions (Pending Review)",
+                    "allocatedMarks": round(req.totalMarks * 0.4, 1),
+                    "awardedMarks": 0.0,
+                    "fulfilled": False,
+                    "examinerNote": "Submission safely preserved. Pending instructor manual grading."
+                },
+                {
+                    "id": "r-manual-2",
+                    "criterion": "Diagrams, Derivations & Calculations (Pending Review)",
+                    "allocatedMarks": round(req.totalMarks * 0.4, 1),
+                    "awardedMarks": 0.0,
+                    "fulfilled": False,
+                    "examinerNote": "Submission safely preserved. Pending instructor manual grading."
+                },
+                {
+                    "id": "r-manual-3",
+                    "criterion": "Exam Presentation & Structure (Pending Review)",
+                    "allocatedMarks": round(req.totalMarks * 0.2, 1),
+                    "awardedMarks": 0.0,
+                    "fulfilled": False,
+                    "examinerNote": "Submission safely preserved. Pending instructor manual grading."
+                }
+            ],
+            "missingCriteria": ["Automated grading unavailable. Please compare against model answer and rubric."],
+            "misconceptions": [],
+            "verifier_shield": True,
+            "confidence_score": 0.0,
+            "audit_notes": "Degraded mode fallback activated following retry exhaustion.",
+            "run_id": status_info.get("run_id")
+        }
+    }
 
 
 class GuardrailAuditRequest(BaseModel):
