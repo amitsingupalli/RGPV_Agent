@@ -12,6 +12,7 @@ import uuid
 from app.tools.security_tools import SecurityGuardrails, SanitizationResult, AcademicScopeResult, AnswerGuardResult
 from app.data.approved_curricula import get_approved_curriculum, generate_structured_accredited_curriculum
 from app.tools.observability import ObservabilityTracker, ModelCallRecord
+from app.tools.feedback_collector import FeedbackCollector, FeedbackInput
 
 router = APIRouter(tags=["Phase-Based LangGraph State Orchestration & AI Copilot"])
 
@@ -1041,5 +1042,23 @@ async def get_observability_metrics():
 async def get_observability_logs(limit: int = 50):
     """Returns recent structured LLM call logs for audit and monitoring."""
     return ObservabilityTracker.get_recent_logs(limit=limit)
+
+
+@router.post("/ai/feedback")
+async def submit_user_feedback(feedback: FeedbackInput):
+    """Submits student/evaluator feedback on explanations, grades, citations, and content flags."""
+    res = FeedbackCollector.record_feedback(feedback)
+    return {
+        "status": "success",
+        "message": "Thank you! Your feedback helps calibrate the RGPV evaluation harness.",
+        "feedback_id": res.get("feedback_id")
+    }
+
+
+@router.get("/ai/feedback/summary")
+async def get_user_feedback_summary(limit: int = 50):
+    """Returns aggregated feedback metrics and recent user submissions."""
+    return FeedbackCollector.get_feedback_summary(limit=limit)
+
 
 
