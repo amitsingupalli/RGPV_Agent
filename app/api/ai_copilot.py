@@ -7,6 +7,7 @@ import urllib.error
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.tools.security_tools import SecurityGuardrails, SanitizationResult, AcademicScopeResult, AnswerGuardResult
 
 router = APIRouter(tags=["AI Copilot (Gemini LLM)"])
 
@@ -221,6 +222,72 @@ Return strictly valid JSON with this exact structure:
 
 @router.post("/ai/learn-topic")
 async def learn_topic_with_ai(req: LearnTopicRequest):
+    # 1. Guardrail Check on Custom Question or Topic Title
+    query_to_check = req.customQuestion.strip() if req.customQuestion else req.topicTitle.strip()
+    scope_res = SecurityGuardrails.check_academic_scope(
+        query_to_check,
+        subject_context=f"{req.subjectCode} {req.subjectName}"
+    )
+
+    if not scope_res.is_academic:
+        return {
+            "source": "guardrail_intercept",
+            "guardrail_status": "blocked",
+            "reason": scope_res.reason,
+            "data": {
+                "typicalQuestion": query_to_check,
+                "standardMarks": 7,
+                "rubricHighlight": "Guardrail Notice: Non-Academic or Unsafe Query Intercepted",
+                "coreDefinition": {
+                    "en": f"Guardrail Shield Intercepted: {scope_res.reason} RGPV-Agent is restricted exclusively to academic university curriculum, engineering derivations, and technical syllabus topics.",
+                    "hi": f"Guardrail Suraksha Suchna: {scope_res.reason} Yeh platform keval RGPV engineering syllabus aur exam preparation ke liye design kiya gaya hai."
+                },
+                "theoryBulletPoints": [
+                    "RGPV-Agent strictly enforces B.Tech university curriculum boundaries.",
+                    "Please enter a valid engineering topic, mathematical equation, or syllabus concept.",
+                    "Off-topic, casual entertainment, or harmful exploit prompts are automatically filtered.",
+                    "Example topics: Database Normalization, Laplace Transforms, Thevenin Theorem, Paging & Virtual Memory."
+                ],
+                "analogy": {
+                    "title": "Academic Guardrail Shield",
+                    "en": "Just as an official university exam paper strictly tests engineering syllabus subjects, this assistant only processes academic curriculum inquiries.",
+                    "hi": "Jaise engineering university exam mein keval prescribed syllabus ke sawal aate hain, waise hi agent keval technical queries process karta hai."
+                },
+                "workedExample": {
+                    "problemStatement": f"Input Query: '{query_to_check}' was flagged as '{scope_res.category}'.",
+                    "stepByStepSolution": [
+                        {
+                            "step": 1,
+                            "title": "Select or Type an Engineering Concept",
+                            "content": f"Please select a topic from your {req.subjectCode} ({req.subjectName}) syllabus dropdown or type an engineering problem statement.",
+                            "codeSnippet": f"Sample Query: 'Explain working principle of {req.subjectName}'"
+                        }
+                    ]
+                },
+                "diagramBlueprint": {
+                    "title": "Guardrail Active: Query Outside Academic Scope",
+                    "caption": f"Guardrail status: {scope_res.category}",
+                    "examDrawingTip": "Keep exam answers strictly focused on RGPV syllabus standards, definitions, and formulas.",
+                    "referenceUrl": "https://www.rgpv.ac.in",
+                    "referenceLabel": "RGPV Bhopal Official Portal",
+                    "nodes": [
+                        {"step": "Query Ingestion", "label": "Student Input", "sub": query_to_check[:35]},
+                        {"step": "Guardrail Verification", "label": "Security & Scope Shield", "sub": scope_res.category},
+                        {"step": "Policy Enforcement", "label": "Academic Restriction", "sub": "Off-topic prompt intercepted"},
+                        {"step": "Guidance", "label": "Curriculum Focus", "sub": "Return to syllabus topics"}
+                    ],
+                    "doList": [
+                        "Enter technical concepts, formulas, or derivations from your branch syllabus.",
+                        "Ask for diagrams, numerical examples, or RGPV university previous year questions."
+                    ],
+                    "dontList": [
+                        "Do NOT submit casual conversation, creative writing, or non-engineering queries.",
+                        "Do NOT attempt prompt-injection or security bypass instructions."
+                    ]
+                }
+            }
+        }
+
     question_focus = (
         f"Specifically answer this custom question: '{req.customQuestion}'"
         if req.customQuestion
@@ -307,13 +374,34 @@ Return strictly valid JSON with this exact schema:
 
     result = call_gemini_json(prompt, timeout_sec=30)
     if result and "coreDefinition" in result:
-        return {"source": "gemini_llm", "data": result}
+        return {"source": "gemini_llm", "guardrail_status": "passed", "data": result}
 
     return {"source": "fallback", "data": None}
 
 
 @router.post("/ai/evaluate-answer")
 async def evaluate_answer_with_ai(req: EvaluateAnswerRequest):
+    # 1. Student Answer Integrity Guardrail
+    guard_res = SecurityGuardrails.guard_student_answer(
+        answer=req.studentAnswer,
+        question=req.questionText,
+        total_marks=req.totalMarks
+    )
+    if not guard_res.is_valid:
+        return {
+            "source": "guardrail_intercept",
+            "guardrail_status": "flagged",
+            "reason": guard_res.flagged_issue,
+            "data": {
+                "score": guard_res.awarded_score,
+                "rubrics": guard_res.rubrics,
+                "missingCriteria": ["Please write an authentic, structured academic answer to receive evaluation marks."],
+                "misconceptions": [f"Guardrail Note: {guard_res.flagged_issue}."],
+                "verifier_shield": True,
+                "audit_notes": guard_res.audit_notes
+            }
+        }
+
     prompt = f"""You are a strict but constructive RGPV Bhopal B.Tech University Examiner grading a student's written answer for Subject: {req.subjectCode} ({req.subjectName}), Topic: {req.topicTitle}.
 
 Exam Question ({req.totalMarks} Marks):
@@ -362,6 +450,40 @@ Return strictly valid JSON with this exact schema:
 
     result = call_gemini_json(prompt, timeout_sec=25)
     if result and "rubrics" in result and "score" in result:
-        return {"source": "gemini_llm", "data": result}
+        # Enforce Verifier Shield Guardrail on LLM Output
+        clamped_score, validated_rubrics, verifier_shield, audit_notes = (
+            SecurityGuardrails.verify_and_clamp_evaluation(
+                raw_score=float(result.get("score", 0.0)),
+                total_marks=req.totalMarks,
+                rubrics=result.get("rubrics", [])
+            )
+        )
+        result["score"] = clamped_score
+        result["rubrics"] = validated_rubrics
+        result["verifier_shield"] = verifier_shield
+        result["audit_notes"] = audit_notes
+        return {"source": "gemini_llm", "guardrail_status": "passed", "data": result}
 
     return {"source": "fallback", "data": None}
+
+
+class GuardrailAuditRequest(BaseModel):
+    text: str
+    context: Optional[str] = None
+
+
+@router.post("/ai/guardrails/check")
+async def check_guardrails(req: GuardrailAuditRequest):
+    """Endpoint for clients/frontend to audit any text against security & academic guardrails."""
+    san_res = SecurityGuardrails.sanitize_text(req.text)
+    scope_res = SecurityGuardrails.check_academic_scope(req.text, req.context)
+    return {
+        "is_safe": san_res.is_safe,
+        "is_academic": scope_res.is_academic,
+        "risk_score": san_res.risk_score,
+        "detected_patterns": san_res.detected_patterns,
+        "category": scope_res.category,
+        "reason": san_res.reason or scope_res.reason,
+        "verifier_shield_active": True
+    }
+

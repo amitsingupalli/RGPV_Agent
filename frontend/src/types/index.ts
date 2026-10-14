@@ -166,6 +166,9 @@ export interface QuizSubmission {
   status: 'pending' | 'evaluated' | 'appealed';
   score?: number;
   verifierShield: boolean;
+  guardrailStatus?: 'passed' | 'flagged' | 'blocked';
+  flaggedIssue?: string;
+  auditNotes?: string[];
   rubrics?: RubricItem[];
   missingCriteria?: string[];
   misconceptions?: string[];

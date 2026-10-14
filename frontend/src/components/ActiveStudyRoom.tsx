@@ -14,7 +14,9 @@ import {
   ArrowRight,
   Send,
   Award,
-  FileCheck
+  FileCheck,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { Topic, Language, Unit, QuizSubmission, RubricItem } from '../types';
 import { evaluateAnswerWithAI } from '../services/aiService';
@@ -194,6 +196,9 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
         status: 'evaluated',
         score: clampedScore,
         verifierShield: true,
+        guardrailStatus: aiEvaluation.guardrail_status,
+        flaggedIssue: aiEvaluation.flagged_issue,
+        auditNotes: aiEvaluation.audit_notes,
         rubrics: aiEvaluation.rubrics,
         missingCriteria: aiEvaluation.missingCriteria || [],
         misconceptions: aiEvaluation.misconceptions || [],
@@ -778,6 +783,30 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
             {/* Grading Result Card (Only shown AFTER the student actually submits an answer!) */}
             {submission && submission.status === 'evaluated' && (
               <div className="pt-4 border-t border-zinc-800 space-y-4">
+                {/* Verifier Guardrail Shield Banner */}
+                <div className="flex items-center justify-between text-[11px] font-mono px-3 py-1.5 rounded-lg bg-zinc-800/80 border border-zinc-700/60 text-zinc-300">
+                  <div className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="font-semibold text-emerald-400">Academic Verifier Shield Active</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-400">
+                    Strict Rubric Clamping &amp; Consistency Enforced
+                  </span>
+                </div>
+
+                {/* Flagged Issue Alert */}
+                {submission.flaggedIssue && (
+                  <div className="p-3.5 rounded-lg bg-rose-950/20 border border-rose-500/30 text-xs text-rose-200 space-y-1">
+                    <span className="font-semibold text-rose-300 flex items-center gap-1.5 font-mono text-[11px]">
+                      <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                      Guardrail Intercept: {submission.flaggedIssue}
+                    </span>
+                    <p className="text-[11px] text-zinc-300">
+                      The academic integrity guardrail intervened on this submission. Please submit an authentic, full technical explanation.
+                    </p>
+                  </div>
+                )}
+
                 <div className="p-3.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between">
                   <div>
                     <span className="text-[11px] text-emerald-400 font-mono block">

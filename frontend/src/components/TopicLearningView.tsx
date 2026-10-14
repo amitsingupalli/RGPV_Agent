@@ -13,7 +13,9 @@ import {
   Award,
   Sparkles,
   RefreshCw,
-  Calculator
+  Calculator,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { Topic, Unit, Language } from '../types';
 import {
@@ -311,6 +313,10 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
                 Live Gemini AI Answer
               </span>
             )}
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              Guardrail Shield Active
+            </span>
           </div>
 
           <div className="flex items-center gap-3 pt-1 flex-wrap">
@@ -423,6 +429,24 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
           )}
         </button>
       </div>
+
+      {/* Guardrail Intercept Notice */}
+      {activeAiData?.guardrail_status === 'blocked' && (
+        <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/40 text-amber-200 text-xs flex items-start gap-3">
+          <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0 mt-0.5">
+            <ShieldAlert className="w-4 h-4" />
+          </div>
+          <div className="space-y-1">
+            <span className="font-semibold text-amber-300 block font-mono text-[11px] uppercase tracking-wide">
+              🛡️ Academic Scope Guardrail Intercepted
+            </span>
+            <p className="text-zinc-300 text-xs leading-relaxed">
+              {activeAiData.guardrail_reason ||
+                'This query was intercepted because it falls outside the accredited RGPV B.Tech university curriculum. The workspace has redirected to authentic engineering syllabus requirements.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: Complete Theoretical Explanation, Principles & Exam Question */}
       <div className="border border-[#27272a] rounded-xl bg-[#18181b] overflow-hidden">

@@ -35,6 +35,8 @@ export interface AITopicStudyGuideResponse {
     doList: string[];
     dontList: string[];
   };
+  guardrail_status?: 'passed' | 'blocked' | 'flagged';
+  guardrail_reason?: string;
 }
 
 export interface AIEvaluationResult {
@@ -42,6 +44,10 @@ export interface AIEvaluationResult {
   rubrics: RubricItem[];
   missingCriteria: string[];
   misconceptions: string[];
+  verifier_shield?: boolean;
+  guardrail_status?: 'passed' | 'flagged' | 'blocked';
+  flagged_issue?: string;
+  audit_notes?: string[];
 }
 
 export async function checkBackendAIStatus(): Promise<{
@@ -273,8 +279,12 @@ export async function fetchAITopicStudyGuide(params: {
     });
     if (!res.ok) return null;
     const json = await res.json();
-    if (json.source === 'gemini_llm' && json.data) {
-      return json.data as AITopicStudyGuideResponse;
+    if ((json.source === 'gemini_llm' || json.source === 'guardrail_intercept') && json.data) {
+      return {
+        ...json.data,
+        guardrail_status: json.guardrail_status,
+        guardrail_reason: json.reason,
+      } as AITopicStudyGuideResponse;
     }
     return null;
   } catch {
@@ -299,8 +309,12 @@ export async function evaluateAnswerWithAI(params: {
     });
     if (!res.ok) return null;
     const json = await res.json();
-    if (json.source === 'gemini_llm' && json.data) {
-      return json.data as AIEvaluationResult;
+    if ((json.source === 'gemini_llm' || json.source === 'guardrail_intercept') && json.data) {
+      return {
+        ...json.data,
+        guardrail_status: json.guardrail_status,
+        verifier_shield: json.data.verifier_shield ?? true,
+      } as AIEvaluationResult;
     }
     return null;
   } catch {
