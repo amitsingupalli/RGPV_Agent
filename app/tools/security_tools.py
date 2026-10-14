@@ -49,7 +49,7 @@ class SecurityGuardrails:
         (re.compile(r"give\s+(?:me\s+)?(?:full|maximum|100%?)\s+marks", re.IGNORECASE), "Score Override Request"),
         (re.compile(r"bypass\s+(?:all\s+)?(?:academic\s+|security\s+)?(?:guardrails|rubrics|filters|security|safety|guidelines)", re.IGNORECASE), "Guardrail Bypass Attempt"),
         (re.compile(r"\b(?:dan\s+mode|jailbreak|developer\s+mode|unrestricted\s+ai)\b", re.IGNORECASE), "Jailbreak Mode Pattern"),
-        (re.compile(r"reveal\s+(?:your\s+)?(?:system\s+prompt|hidden\s+instructions|secret\s+key|prompt\b)", re.IGNORECASE), "System Prompt Leakage Attempt"),
+        (re.compile(r"(?:reveal|repeat|show|print|leak|display)\s+(?:your\s+)?(?:entire\s+)?(?:system\s+prompt|hidden\s+instructions|secret\s+key|internal\s+guidelines|prompt\b)", re.IGNORECASE), "System Prompt Leakage Attempt"),
         (re.compile(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", re.IGNORECASE | re.DOTALL), "HTML/Script Injection"),
         (re.compile(r"javascript\s*:", re.IGNORECASE), "JavaScript URI Scheme"),
         (re.compile(r"on(?:error|load|click|mouse[a-z]+)\s*=", re.IGNORECASE), "Inline DOM Event Handler Injection"),
