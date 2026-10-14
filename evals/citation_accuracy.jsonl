@@ -1,0 +1,4 @@
+{"citation_id": "cite_eval_01", "subject_code": "CS-403", "topic": "Three-Schema Architecture", "expected_doc_type": "official_syllabus", "expected_page": 1, "excerpt_keyword": "ANSI/SPARC", "is_valid": true}
+{"citation_id": "cite_eval_02", "subject_code": "CS-403", "topic": "Boyce-Codd Normal Form", "expected_doc_type": "official_syllabus", "expected_page": 3, "excerpt_keyword": "Functional Dependency", "is_valid": true}
+{"citation_id": "cite_eval_03", "subject_code": "BT-101", "topic": "EDTA Hardness Method", "expected_doc_type": "official_syllabus", "expected_page": 1, "excerpt_keyword": "EDTA", "is_valid": true}
+{"citation_id": "cite_eval_fake_04", "subject_code": "CS-403", "topic": "Quantum Teleportation", "expected_doc_type": "official_syllabus", "expected_page": 999, "excerpt_keyword": "Quantum", "is_valid": false}
