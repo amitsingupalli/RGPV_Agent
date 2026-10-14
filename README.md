@@ -26,6 +26,8 @@ Standard RAG wrappers and conversational chatbots fail university engineering st
 
 ## 2. System Architecture & 18-Node LangGraph State Machine
 
+> **Architectural Paradigm**: RGPV-Agent is built as a **Phase-based LangGraph-style State Orchestration Workflow with Specialized Node Executors**, rather than unconstrained autonomous multi-agent swarms. Each phase operates as a deterministic, bounded state-graph node (Ingestion Node, Syllabus Decomposer, Priority Scheduler, Topic Master, and Answer Evaluator with Verifier Shield) with explicit Human-in-the-Loop (HITL) review gates to eliminate runaway agency and guarantee educational reproducibility.
+
 ```mermaid
 flowchart TD
     subgraph Ingestion ["Phase 1: Ingestion & Syllabus/PYQ Grounding"]

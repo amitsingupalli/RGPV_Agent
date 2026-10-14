@@ -37,6 +37,9 @@ export interface AITopicStudyGuideResponse {
   };
   guardrail_status?: 'passed' | 'blocked' | 'flagged';
   guardrail_reason?: string;
+  is_ai_draft?: boolean;
+  disclaimer?: string;
+  status_label?: string;
 }
 
 export interface AIEvaluationResult {
@@ -48,6 +51,11 @@ export interface AIEvaluationResult {
   guardrail_status?: 'passed' | 'flagged' | 'blocked';
   flagged_issue?: string;
   audit_notes?: string[];
+  confidence_score?: number;
+  needs_human_review?: boolean;
+  review_reason?: string;
+  is_ai_draft?: boolean;
+  disclaimer?: string;
 }
 
 export async function checkBackendAIStatus(): Promise<{
@@ -284,6 +292,9 @@ export async function fetchAITopicStudyGuide(params: {
         ...json.data,
         guardrail_status: json.guardrail_status,
         guardrail_reason: json.reason,
+        is_ai_draft: json.is_ai_draft ?? true,
+        disclaimer: json.disclaimer || 'AI-Generated Draft: Review against official RGPV scheme before final exams.',
+        status_label: json.status_label,
       } as AITopicStudyGuideResponse;
     }
     return null;
@@ -314,6 +325,11 @@ export async function evaluateAnswerWithAI(params: {
         ...json.data,
         guardrail_status: json.guardrail_status,
         verifier_shield: json.data.verifier_shield ?? true,
+        confidence_score: json.data.confidence_score,
+        needs_human_review: json.data.needs_human_review,
+        review_reason: json.data.review_reason,
+        is_ai_draft: json.is_ai_draft ?? true,
+        disclaimer: json.disclaimer,
       } as AIEvaluationResult;
     }
     return null;

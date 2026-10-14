@@ -345,6 +345,59 @@ class SecurityGuardrails:
         return final_score, validated_rubrics, True, audit_notes
 
     @classmethod
+    def compute_grading_confidence(
+        cls,
+        final_score: float,
+        total_marks: int,
+        student_answer: str,
+        rubrics: List[Dict[str, Any]]
+    ) -> Tuple[float, bool, Optional[str]]:
+        """Calculates deterministic confidence score [0.0 - 1.0] and determines if instructor review is required.
+        - Low confidence triggers when student answer is borderline, highly dispersed across rubrics, or too short.
+        - High confidence indicates definitive mastery or clearly established deficiency.
+        """
+        words = len(student_answer.strip().split())
+        score_ratio = final_score / max(1.0, float(total_marks))
+
+        # Base confidence starts high for well-calibrated rubric sets
+        confidence = 0.94
+
+        # 1. Answer length factor
+        if words < 20:
+            confidence -= 0.18
+        elif words > 450:
+            confidence -= 0.05
+
+        # 2. Borderline score factor (35% to 52% is standard RGPV pass/fail boundary)
+        is_borderline = (0.35 <= score_ratio <= 0.52)
+        if is_borderline:
+            confidence -= 0.15
+
+        # 3. Rubric fulfillment consistency
+        fulfilled_count = sum(1 for r in rubrics if r.get("fulfilled", False))
+        total_rubrics = max(1, len(rubrics))
+        fulfillment_ratio = fulfilled_count / total_rubrics
+
+        # If overall score is high but few rubrics fulfilled, or vice versa, confidence drops
+        if abs(score_ratio - fulfillment_ratio) > 0.35:
+            confidence -= 0.12
+
+        confidence = round(max(0.40, min(0.99, confidence)), 2)
+
+        needs_human_review = (confidence < 0.75) or (is_borderline and words >= 25)
+        review_reason = None
+        if needs_human_review:
+            if is_borderline:
+                review_reason = f"Borderline exam score ({round(score_ratio * 100)}%) near RGPV pass/fail threshold. Instructor verification recommended."
+            elif confidence < 0.75:
+                review_reason = f"Automated grading confidence is {int(confidence * 100)}%. Subject-matter instructor review flagged."
+            else:
+                review_reason = "Answer flagged for human verification."
+
+        return confidence, needs_human_review, review_reason
+
+
+    @classmethod
     def validate_file_path(cls, base_dir: str, filename: str) -> tuple[bool, Optional[str], str]:
         """Guards against path traversal directory escape attacks (e.g. ../../etc/passwd)."""
         safe_filename = os.path.basename(filename)

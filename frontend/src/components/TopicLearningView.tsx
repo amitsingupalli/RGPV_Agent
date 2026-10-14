@@ -210,10 +210,12 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
   const [isGeneratingAI, setIsGeneratingAI] = useState<boolean>(false);
   const [aiGuideCache, setAiGuideCache] = useState<Record<string, AITopicStudyGuideResponse>>({});
   const [activeCustomGuide, setActiveCustomGuide] = useState<AITopicStudyGuideResponse | null>(null);
+  const [isConfirmedByStudent, setIsConfirmedByStudent] = useState<boolean>(false);
 
   // Clear active custom override when user switches syllabus topic from dropdown
   useEffect(() => {
     setActiveCustomGuide(null);
+    setIsConfirmedByStudent(false);
   }, [currentTopic?.id]);
 
   if (!currentTopic || allUnits.length === 0) {
@@ -447,6 +449,30 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Production AI-Generated Draft Disclosure & Student Confirmation */}
+      <div className="p-3.5 rounded-xl bg-[#141416] border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 flex-wrap text-zinc-300">
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">
+            AI-Generated Draft
+          </span>
+          <span className="text-zinc-400 text-[11px]">
+            {activeAiData?.disclaimer || 'Generated via RGPV syllabus model. Review against official college scheme before final exams.'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsConfirmedByStudent(!isConfirmedByStudent)}
+          className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer ${
+            isConfirmedByStudent
+              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+          }`}
+        >
+          <CheckCircle2 className={`w-3.5 h-3.5 ${isConfirmedByStudent ? 'text-emerald-400' : 'text-zinc-500'}`} />
+          <span>{isConfirmedByStudent ? 'Syllabus Alignment Confirmed' : 'Confirm Syllabus Alignment'}</span>
+        </button>
+      </div>
 
       {/* SECTION 1: Complete Theoretical Explanation, Principles & Exam Question */}
       <div className="border border-[#27272a] rounded-xl bg-[#18181b] overflow-hidden">

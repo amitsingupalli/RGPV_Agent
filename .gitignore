@@ -30,6 +30,10 @@ wheels/
 .env.*.local
 env.txt
 **/env.txt
+secrets/
+*.pem
+*.key
+uploads/isolated/
 
 # IDEs
 .idea/

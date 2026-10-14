@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    description="Adaptive University Exam Preparation Agent for RGPV Students",
+    description="Phase-Based LangGraph State Orchestration & Adaptive Exam Preparation System for RGPV Students",
     version="0.1.0",
     lifespan=lifespan
 )

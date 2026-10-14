@@ -12,8 +12,15 @@ from app.nodes.questions import QuestionParserEngine, QuestionClassifier, Questi
 from app.nodes.analysis import DocumentAnalysisEngine, DocumentAnalysisReport
 from app.api.auth import get_current_user
 
+from app.tools.security_tools import SecurityGuardrails
+
 settings = get_settings()
 router = APIRouter(prefix="/documents", tags=["Documents"])
+
+MAX_FILE_SIZE = 15 * 1024 * 1024  # 15 MB
+DANGEROUS_EXTENSIONS = {
+    ".exe", ".bat", ".cmd", ".sh", ".py", ".js", ".vbs", ".dll", ".scr", ".msi", ".jar", ".ps1", ".com", ".hta"
+}
 
 # In-memory session stores for extracted state
 DOCUMENTS_STORE: dict[str, dict] = {}
@@ -36,17 +43,42 @@ async def upload_document(
     subject_id: str = Form(default="dbms_cs403"),
     current_user: dict = Depends(get_current_user)
 ):
-    """Uploads a PDF or text document and performs page-preserving parsing."""
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in [".pdf", ".txt", ".md"]:
-        raise HTTPException(status_code=400, detail="Only .pdf, .txt, and .md files are supported.")
+    """Uploads a PDF or text document with 15MB limit, magic-bytes check, and isolated storage."""
+    raw_filename = file.filename or "uploaded_document"
+    ext = os.path.splitext(raw_filename)[1].lower()
 
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-    doc_id = f"doc_{uuid.uuid4().hex[:8]}"
-    save_path = os.path.join(settings.UPLOAD_DIR, f"{doc_id}_{file.filename}")
+    # 1. Extension & executable blocklist check
+    if ext in DANGEROUS_EXTENSIONS or ext not in [".pdf", ".txt", ".md"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Only genuine .pdf, .txt, and .md files are supported. Executables and script files are strictly blocked."
+        )
+
+    # 2. Read contents & enforce 15MB size limit
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds maximum permitted size of 15MB (received {round(len(contents) / (1024 * 1024), 2)}MB)."
+        )
+
+    # 3. Magic bytes signature validation for PDFs
+    if ext == ".pdf":
+        is_valid_sig, sig_err = SecurityGuardrails.validate_pdf_signature(contents)
+        if not is_valid_sig:
+            raise HTTPException(status_code=400, detail=f"Invalid file signature: {sig_err}")
+
+    # 4. Isolated storage: random UUID disk filename (never uses user-supplied filename on filesystem)
+    doc_uuid = uuid.uuid4().hex
+    doc_id = f"doc_{doc_uuid[:8]}"
+    isolated_dir = os.path.join(settings.UPLOAD_DIR, "isolated")
+    os.makedirs(isolated_dir, exist_ok=True)
+
+    safe_disk_name = f"{doc_uuid}{ext}"
+    save_path = os.path.join(isolated_dir, safe_disk_name)
 
     with open(save_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(contents)
 
     parse_result = PDFParser.parse_document(save_path)
     if not parse_result.is_valid:

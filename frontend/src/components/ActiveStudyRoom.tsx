@@ -199,6 +199,11 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
         guardrailStatus: aiEvaluation.guardrail_status,
         flaggedIssue: aiEvaluation.flagged_issue,
         auditNotes: aiEvaluation.audit_notes,
+        confidenceScore: aiEvaluation.confidence_score,
+        needsHumanReview: aiEvaluation.needs_human_review,
+        reviewReason: aiEvaluation.review_reason,
+        isAiDraft: aiEvaluation.is_ai_draft,
+        disclaimer: aiEvaluation.disclaimer,
         rubrics: aiEvaluation.rubrics,
         missingCriteria: aiEvaluation.missingCriteria || [],
         misconceptions: aiEvaluation.misconceptions || [],
@@ -794,6 +799,35 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   </span>
                 </div>
 
+                {/* Confidence Metric & Human Review Flag */}
+                {submission.confidenceScore !== undefined && (
+                  <div className="flex items-center justify-between text-[11px] font-mono px-3 py-1.5 rounded-lg bg-[#141416] border border-zinc-800 text-zinc-300">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-zinc-500">Grading Confidence:</span>
+                      <span className={`font-semibold ${submission.confidenceScore >= 0.80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {Math.round(submission.confidenceScore * 100)}%
+                        {submission.confidenceScore >= 0.85 ? ' (High Reliability)' : ' (Needs Review)'}
+                      </span>
+                    </div>
+                    {submission.needsHumanReview && (
+                      <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px]">
+                        Instructor Verification Recommended
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Review Reason Alert */}
+                {submission.needsHumanReview && submission.reviewReason && (
+                  <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block font-mono text-[11px]">Human Review Flagged</span>
+                      <p className="text-[11px] text-zinc-300 mt-0.5">{submission.reviewReason}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Flagged Issue Alert */}
                 {submission.flaggedIssue && (
                   <div className="p-3.5 rounded-lg bg-rose-950/20 border border-rose-500/30 text-xs text-rose-200 space-y-1">
@@ -901,6 +935,11 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                       ✓ Flagged for Review
                     </span>
                   )}
+                </div>
+
+                {/* AI-Generated Evaluation Draft Disclaimer */}
+                <div className="pt-2 text-center text-[10px] text-zinc-500 font-mono border-t border-zinc-800/60">
+                  ⚠️ AI-Generated Evaluation Draft • Cross-check with university grading schemes before final exam
                 </div>
               </div>
             )}

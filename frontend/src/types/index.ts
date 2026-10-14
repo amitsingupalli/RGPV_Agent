@@ -169,6 +169,11 @@ export interface QuizSubmission {
   guardrailStatus?: 'passed' | 'flagged' | 'blocked';
   flaggedIssue?: string;
   auditNotes?: string[];
+  confidenceScore?: number;
+  needsHumanReview?: boolean;
+  reviewReason?: string;
+  isAiDraft?: boolean;
+  disclaimer?: string;
   rubrics?: RubricItem[];
   missingCriteria?: string[];
   misconceptions?: string[];
