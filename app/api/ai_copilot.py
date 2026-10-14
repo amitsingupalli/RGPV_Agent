@@ -7,8 +7,11 @@ import urllib.error
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
+import time
+import uuid
 from app.tools.security_tools import SecurityGuardrails, SanitizationResult, AcademicScopeResult, AnswerGuardResult
 from app.data.approved_curricula import get_approved_curriculum, generate_structured_accredited_curriculum
+from app.tools.observability import ObservabilityTracker, ModelCallRecord
 
 router = APIRouter(tags=["Phase-Based LangGraph State Orchestration & AI Copilot"])
 
@@ -52,11 +55,20 @@ def load_gemini_api_keys() -> List[str]:
     return keys
 
 
-def call_gemini_json(prompt: str, timeout_sec: int = 12) -> Optional[Dict[str, Any]]:
-    """Call Google Gemini API (gemini-3.5-flash-lite) with fast timeout and parse JSON output."""
+def call_gemini_json(
+    prompt: str,
+    timeout_sec: int = 12,
+    phase: str = "general",
+    run_id: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Call Google Gemini API with observability instrumentation, latency tracking, and cost logging."""
     keys = load_gemini_api_keys()
     if not keys:
         return None
+
+    call_run_id = run_id or f"run_{uuid.uuid4().hex[:8]}"
+    start_time = time.time()
+    input_tokens = ObservabilityTracker.estimate_tokens(prompt)
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -78,6 +90,7 @@ def call_gemini_json(prompt: str, timeout_sec: int = 12) -> Optional[Dict[str, A
             )
             try:
                 with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                    latency_ms = int((time.time() - start_time) * 1000)
                     body = json.loads(resp.read().decode("utf-8"))
                     candidates = body.get("candidates", [])
                     if not candidates:
@@ -90,12 +103,44 @@ def call_gemini_json(prompt: str, timeout_sec: int = 12) -> Optional[Dict[str, A
                     text_out = text_out.strip()
                     text_out = re.sub(r"^```(?:json)?\s*", "", text_out)
                     text_out = re.sub(r"\s*```$", "", text_out)
-                    return json.loads(text_out)
+                    parsed_json = json.loads(text_out)
+
+                    output_tokens = ObservabilityTracker.estimate_tokens(text_out)
+                    cost_usd = ObservabilityTracker.calculate_cost(input_tokens, output_tokens, model_name)
+
+                    # Log successful model invocation
+                    ObservabilityTracker.log_call(ModelCallRecord(
+                        run_id=call_run_id,
+                        phase=phase,
+                        model=model_name,
+                        latency_ms=latency_ms,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        schema_valid=True,
+                        verifier_status="passed",
+                        cost_usd=cost_usd,
+                        safety_blocked=False
+                    ))
+                    return parsed_json
             except urllib.error.HTTPError as e:
                 if e.code in (401, 403, 429):
                     continue
                 break
-            except Exception:
+            except Exception as err:
+                latency_ms = int((time.time() - start_time) * 1000)
+                ObservabilityTracker.log_call(ModelCallRecord(
+                    run_id=call_run_id,
+                    phase=phase,
+                    model=model_name,
+                    latency_ms=latency_ms,
+                    input_tokens=input_tokens,
+                    output_tokens=0,
+                    schema_valid=False,
+                    verifier_status="rejected",
+                    cost_usd=0.0,
+                    safety_blocked=False,
+                    error=str(err)
+                ))
                 continue
 
     return None
@@ -565,4 +610,17 @@ async def check_guardrails(req: GuardrailAuditRequest):
         "reason": san_res.reason or scope_res.reason,
         "verifier_shield_active": True
     }
+
+
+@router.get("/ai/observability/metrics")
+async def get_observability_metrics():
+    """Returns aggregated real-time LLM observability metrics (latency, cost, schema errors)."""
+    return ObservabilityTracker.get_metrics()
+
+
+@router.get("/ai/observability/logs")
+async def get_observability_logs(limit: int = 50):
+    """Returns recent structured LLM call logs for audit and monitoring."""
+    return ObservabilityTracker.get_recent_logs(limit=limit)
+
 
