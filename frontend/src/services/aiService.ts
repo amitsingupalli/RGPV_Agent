@@ -35,20 +35,24 @@ export interface AITopicStudyGuideResponse {
     doList: string[];
     dontList: string[];
   };
-  guardrail_status?: 'passed' | 'blocked' | 'flagged';
+  guardrail_status?: 'passed' | 'blocked' | 'flagged' | 'degraded';
   guardrail_reason?: string;
   is_ai_draft?: boolean;
   disclaimer?: string;
   status_label?: string;
+  source?: string;
+  degraded_mode?: boolean;
+  notice?: string;
+  run_id?: string;
 }
 
 export interface AIEvaluationResult {
-  score: number;
+  score: number | null;
   rubrics: RubricItem[];
   missingCriteria: string[];
   misconceptions: string[];
   verifier_shield?: boolean;
-  guardrail_status?: 'passed' | 'flagged' | 'blocked';
+  guardrail_status?: 'passed' | 'flagged' | 'blocked' | 'degraded';
   flagged_issue?: string;
   audit_notes?: string[];
   confidence_score?: number;
@@ -56,6 +60,52 @@ export interface AIEvaluationResult {
   review_reason?: string;
   is_ai_draft?: boolean;
   disclaimer?: string;
+  source?: string;
+  degraded_mode?: boolean;
+  notice?: string;
+  student_notice?: string;
+  run_id?: string;
+}
+
+export interface UserFeedbackPayload {
+  run_id?: string;
+  phase: 'exam_room' | 'topic_learning' | 'curriculum';
+  subject_code?: string;
+  topic_title?: string;
+  helpful?: boolean;
+  grade_fair?: boolean;
+  citation_accurate?: boolean;
+  citation_error_details?: string;
+  topic_missing?: boolean;
+  missing_topic_details?: string;
+  flagged?: boolean;
+  flag_reason?: string;
+  user_suggested_score?: number;
+  comment?: string;
+}
+
+export interface ObservabilityMetrics {
+  total_calls: number;
+  average_latency_ms: number;
+  p95_latency_ms: number;
+  total_cost_usd: number;
+  average_cost_usd: number;
+  schema_failures: number;
+  schema_failure_rate_pct: number;
+  retry_count: number;
+  retry_rate_pct: number;
+  verifier_rejections: number;
+  user_corrections: number;
+  prompt_injection_attempts: number;
+}
+
+export interface FeedbackSummary {
+  total_feedback: number;
+  helpful_rate_pct: number;
+  fair_grade_rate_pct: number;
+  citation_accuracy_rate_pct: number;
+  missing_topics_count: number;
+  flagged_count: number;
 }
 
 export async function checkBackendAIStatus(): Promise<{
@@ -287,9 +337,13 @@ export async function fetchAITopicStudyGuide(params: {
     });
     if (!res.ok) return null;
     const json = await res.json();
-    if ((json.source === 'gemini_llm' || json.source === 'guardrail_intercept') && json.data) {
+    if (json.data) {
       return {
         ...json.data,
+        source: json.source,
+        degraded_mode: json.source === 'degraded_fallback',
+        notice: json.notice,
+        run_id: json.run_id,
         guardrail_status: json.guardrail_status,
         guardrail_reason: json.reason,
         is_ai_draft: json.is_ai_draft ?? true,
@@ -320,9 +374,14 @@ export async function evaluateAnswerWithAI(params: {
     });
     if (!res.ok) return null;
     const json = await res.json();
-    if ((json.source === 'gemini_llm' || json.source === 'guardrail_intercept') && json.data) {
+    if (json.data) {
       return {
         ...json.data,
+        source: json.source,
+        degraded_mode: json.source === 'degraded_fallback' || json.data.degraded_mode,
+        notice: json.notice,
+        student_notice: json.data.student_notice || json.notice,
+        run_id: json.data.run_id || json.run_id,
         guardrail_status: json.guardrail_status,
         verifier_shield: json.data.verifier_shield ?? true,
         confidence_score: json.data.confidence_score,
@@ -337,3 +396,38 @@ export async function evaluateAnswerWithAI(params: {
     return null;
   }
 }
+
+export async function submitUserFeedback(feedback: UserFeedbackPayload): Promise<{ status: string; feedback_id?: string } | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(feedback),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchObservabilityMetrics(): Promise<ObservabilityMetrics | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/observability/metrics`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchFeedbackSummary(): Promise<FeedbackSummary | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/feedback/summary`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+

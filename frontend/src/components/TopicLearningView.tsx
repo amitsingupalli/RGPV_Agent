@@ -15,12 +15,18 @@ import {
   RefreshCw,
   Calculator,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  Flag,
+  AlertTriangle
 } from 'lucide-react';
 import { Topic, Unit, Language } from '../types';
 import {
   fetchAITopicStudyGuide,
-  AITopicStudyGuideResponse
+  AITopicStudyGuideResponse,
+  submitUserFeedback
 } from '../services/aiService';
 
 interface TopicLearningViewProps {
@@ -212,10 +218,18 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
   const [activeCustomGuide, setActiveCustomGuide] = useState<AITopicStudyGuideResponse | null>(null);
   const [isConfirmedByStudent, setIsConfirmedByStudent] = useState<boolean>(false);
 
+  // User feedback loop state
+  const [topicFeedbackGiven, setTopicFeedbackGiven] = useState<boolean>(false);
+  const [showTopicReportModal, setShowTopicReportModal] = useState<boolean>(false);
+  const [topicReportReason, setTopicReportReason] = useState<string>('');
+
   // Clear active custom override when user switches syllabus topic from dropdown
   useEffect(() => {
     setActiveCustomGuide(null);
     setIsConfirmedByStudent(false);
+    setTopicFeedbackGiven(false);
+    setShowTopicReportModal(false);
+    setTopicReportReason('');
   }, [currentTopic?.id]);
 
   if (!currentTopic || allUnits.length === 0) {
@@ -259,6 +273,31 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
         setAiGuideCache((prev) => ({ ...prev, [currentTopic.id]: result }));
       }
     }
+  };
+
+  const handleTopicFeedback = async (helpful: boolean) => {
+    setTopicFeedbackGiven(true);
+    await submitUserFeedback({
+      run_id: activeAiData?.run_id,
+      phase: 'topic_learning',
+      subject_code: subjectCode,
+      topic_title: currentTopic?.title,
+      helpful,
+    });
+  };
+
+  const handleTopicReport = async () => {
+    if (!topicReportReason.trim()) return;
+    await submitUserFeedback({
+      run_id: activeAiData?.run_id,
+      phase: 'topic_learning',
+      subject_code: subjectCode,
+      topic_title: currentTopic?.title,
+      flagged: true,
+      flag_reason: topicReportReason,
+    });
+    setShowTopicReportModal(false);
+    setTopicFeedbackGiven(true);
   };
 
   const activeAiData = activeCustomGuide || aiGuideCache[currentTopic.id] || null;
@@ -309,10 +348,16 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
             <span className="text-xs font-mono text-amber-400">
               Asked {currentTopic.appearancesCount}× in Past Exams ({currentTopic.totalMarksInPast5Years} Marks)
             </span>
-            {activeAiData && (
+            {activeAiData && !activeAiData.degraded_mode && (
               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
                 Live Gemini AI Answer
+              </span>
+            )}
+            {activeAiData?.degraded_mode && (
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                Degraded Fallback Notes
               </span>
             )}
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 flex items-center gap-1">
@@ -724,6 +769,78 @@ export const TopicLearningView: React.FC<TopicLearningViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* User Feedback & Quality Verification Bar */}
+      <div className="border border-[#27272a] rounded-xl bg-[#18181b] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-zinc-300">
+          <MessageSquare className="w-4 h-4 text-indigo-400" />
+          <span className="font-medium font-mono text-[11px]">Was this study guide and diagram explanation helpful?</span>
+        </div>
+
+        {topicFeedbackGiven ? (
+          <span className="text-emerald-400 font-mono text-[11px]">
+            ✓ Thank you! Feedback recorded to improve the curriculum.
+          </span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleTopicFeedback(true)}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-emerald-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ThumbsUp className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Helpful</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTopicFeedback(false)}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-rose-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <ThumbsDown className="w-3.5 h-3.5 text-rose-400" />
+              <span>Not Helpful</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTopicReportModal(!showTopicReportModal)}
+              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors cursor-pointer text-[11px]"
+            >
+              <Flag className="w-3 h-3 text-amber-400" />
+              <span>Report Issue</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {showTopicReportModal && !topicFeedbackGiven && (
+        <div className="p-4 rounded-xl bg-[#141416] border border-amber-500/30 space-y-2 text-xs">
+          <span className="font-semibold text-amber-300 block font-mono text-[11px]">
+            Report Issue (Missing Topic, Formula, or Citation Error):
+          </span>
+          <textarea
+            rows={2}
+            value={topicReportReason}
+            onChange={(e) => setTopicReportReason(e.target.value)}
+            placeholder="Describe what topic, equation, or diagram was missing or inaccurate..."
+            className="w-full bg-[#18181b] border border-zinc-700 rounded p-2 text-xs text-zinc-200"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowTopicReportModal(false)}
+              className="px-3 py-1 rounded bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-[11px]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleTopicReport}
+              className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-medium"
+            >
+              Submit Report
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Action Bar to Proceed to Step 5: Study Room Practice */}
       <div className="border border-indigo-500/30 rounded-xl bg-gradient-to-r from-indigo-950/40 via-[#18181b] to-[#18181b] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

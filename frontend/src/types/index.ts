@@ -164,9 +164,9 @@ export interface QuizSubmission {
   studentAnswer: string;
   submittedAt: string;
   status: 'pending' | 'evaluated' | 'appealed';
-  score?: number;
+  score?: number | null;
   verifierShield: boolean;
-  guardrailStatus?: 'passed' | 'flagged' | 'blocked';
+  guardrailStatus?: 'passed' | 'flagged' | 'blocked' | 'degraded';
   flaggedIssue?: string;
   auditNotes?: string[];
   confidenceScore?: number;
@@ -174,6 +174,9 @@ export interface QuizSubmission {
   reviewReason?: string;
   isAiDraft?: boolean;
   disclaimer?: string;
+  degradedMode?: boolean;
+  studentNotice?: string;
+  runId?: string;
   rubrics?: RubricItem[];
   missingCriteria?: string[];
   misconceptions?: string[];

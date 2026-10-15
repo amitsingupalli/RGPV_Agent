@@ -16,10 +16,14 @@ import {
   Award,
   FileCheck,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  Flag
 } from 'lucide-react';
 import { Topic, Language, Unit, QuizSubmission, RubricItem } from '../types';
-import { evaluateAnswerWithAI } from '../services/aiService';
+import { evaluateAnswerWithAI, submitUserFeedback } from '../services/aiService';
 
 interface ActiveStudyRoomProps {
   currentTopic: Topic | null;
@@ -60,6 +64,20 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
   const [submission, setSubmission] = useState<QuizSubmission | null>(null);
   const [hasAppealed, setHasAppealed] = useState<boolean>(false);
 
+  // User feedback loop state
+  const [feedbackOpen, setFeedbackOpen] = useState<boolean>(false);
+  const [feedbackHelpful, setFeedbackHelpful] = useState<boolean | null>(null);
+  const [feedbackGradeFair, setFeedbackGradeFair] = useState<boolean | null>(null);
+  const [feedbackSuggestedScore, setFeedbackSuggestedScore] = useState<string>('');
+  const [feedbackCitationAccurate, setFeedbackCitationAccurate] = useState<boolean | null>(null);
+  const [feedbackCitationDetails, setFeedbackCitationDetails] = useState<string>('');
+  const [feedbackTopicMissing, setFeedbackTopicMissing] = useState<boolean | null>(null);
+  const [feedbackMissingDetails, setFeedbackMissingDetails] = useState<string>('');
+  const [feedbackFlagged, setFeedbackFlagged] = useState<boolean>(false);
+  const [feedbackFlagReason, setFeedbackFlagReason] = useState<string>('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState<boolean>(false);
+
   // Reset state whenever user switches to a different topic
   useEffect(() => {
     setSelectedDiagnosticOption(null);
@@ -68,6 +86,17 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
     setSubmission(null);
     setHasAppealed(false);
     setIsEditingQuestion(false);
+    setFeedbackOpen(false);
+    setFeedbackHelpful(null);
+    setFeedbackGradeFair(null);
+    setFeedbackSuggestedScore('');
+    setFeedbackCitationAccurate(null);
+    setFeedbackCitationDetails('');
+    setFeedbackTopicMissing(null);
+    setFeedbackMissingDetails('');
+    setFeedbackFlagged(false);
+    setFeedbackFlagReason('');
+    setFeedbackSubmitted(false);
     if (currentTopic) {
       setCustomQuestionText(currentTopic.pedagogicalContent.examPattern.typicalQuestion);
     }
@@ -173,17 +202,20 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
     setIsVerifying(false);
 
     if (aiEvaluation) {
-      const clampedScore = Math.max(
-        0,
-        Math.min(totalMarks, Number(aiEvaluation.score) || 0)
-      );
-      const scorePct = clampedScore / totalMarks;
+      const isDegraded = aiEvaluation.degraded_mode || aiEvaluation.source === 'degraded_fallback';
+      const clampedScore = aiEvaluation.score !== null && aiEvaluation.score !== undefined
+        ? Math.max(0, Math.min(totalMarks, Number(aiEvaluation.score) || 0))
+        : null;
       const beforeMastery = currentTopic.masteryPercentage;
-      const afterMastery = Math.max(
-        0,
-        Math.min(100, Math.round(0.6 * (scorePct * 100) + 0.4 * beforeMastery))
-      );
-      onUpdateTopicMastery(currentTopic.id, afterMastery);
+      let afterMastery = beforeMastery;
+      if (clampedScore !== null) {
+        const scorePct = clampedScore / totalMarks;
+        afterMastery = Math.max(
+          0,
+          Math.min(100, Math.round(0.6 * (scorePct * 100) + 0.4 * beforeMastery))
+        );
+        onUpdateTopicMastery(currentTopic.id, afterMastery);
+      }
 
       setSubmission({
         id: `sub-${Date.now()}`,
@@ -192,25 +224,30 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
         questionType: 'Conceptual',
         totalMarks,
         studentAnswer: studentAnswerText,
-        submittedAt: 'Just now • Graded by Gemini AI Examiner',
+        submittedAt: isDegraded ? 'Saved • Pending Manual Review' : 'Just now • Graded by Gemini AI Examiner',
         status: 'evaluated',
         score: clampedScore,
         verifierShield: true,
-        guardrailStatus: aiEvaluation.guardrail_status,
+        guardrailStatus: isDegraded ? 'degraded' : aiEvaluation.guardrail_status,
         flaggedIssue: aiEvaluation.flagged_issue,
         auditNotes: aiEvaluation.audit_notes,
         confidenceScore: aiEvaluation.confidence_score,
-        needsHumanReview: aiEvaluation.needs_human_review,
-        reviewReason: aiEvaluation.review_reason,
+        needsHumanReview: isDegraded || aiEvaluation.needs_human_review,
+        reviewReason: isDegraded
+          ? 'Automatic grading temporarily unavailable. Routed to instructor review.'
+          : aiEvaluation.review_reason,
         isAiDraft: aiEvaluation.is_ai_draft,
         disclaimer: aiEvaluation.disclaimer,
+        degradedMode: isDegraded,
+        studentNotice: aiEvaluation.student_notice || (isDegraded ? 'Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric.' : undefined),
+        runId: aiEvaluation.run_id,
         rubrics: aiEvaluation.rubrics,
         missingCriteria: aiEvaluation.missingCriteria || [],
         misconceptions: aiEvaluation.misconceptions || [],
-        masteryDelta: {
+        masteryDelta: clampedScore !== null ? {
           before: beforeMastery,
           after: afterMastery,
-        },
+        } : undefined,
       });
       return;
     }
@@ -346,6 +383,28 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
     onTriggerHitlAppeal(
       `Review requested for ${currentTopic.title} (${submission?.score}/${totalMarks} Marks)`
     );
+  };
+
+  const handleFeedbackSubmit = async () => {
+    setIsSubmittingFeedback(true);
+    await submitUserFeedback({
+      run_id: submission?.runId,
+      phase: 'exam_room',
+      subject_code: subjectCode,
+      topic_title: currentTopic?.title,
+      helpful: feedbackHelpful ?? undefined,
+      grade_fair: feedbackGradeFair ?? undefined,
+      citation_accurate: feedbackCitationAccurate ?? undefined,
+      citation_error_details: feedbackCitationDetails || undefined,
+      topic_missing: feedbackTopicMissing ?? undefined,
+      missing_topic_details: feedbackMissingDetails || undefined,
+      flagged: feedbackFlagged,
+      flag_reason: feedbackFlagReason || undefined,
+      user_suggested_score: feedbackSuggestedScore ? parseFloat(feedbackSuggestedScore) : undefined,
+      comment: '',
+    });
+    setIsSubmittingFeedback(false);
+    setFeedbackSubmitted(true);
   };
 
   return (
@@ -841,16 +900,37 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                   </div>
                 )}
 
+                {/* Degraded Fallback Banner */}
+                {submission.degradedMode && (
+                  <div className="p-3.5 rounded-lg bg-amber-950/30 border border-amber-500/40 text-amber-200 text-xs space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-semibold text-amber-300 font-mono text-[11px]">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Notice: Automatic Grading Temporarily Unavailable</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-200 leading-relaxed">
+                      {submission.studentNotice || 'Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric.'}
+                    </p>
+                  </div>
+                )}
+
                 <div className="p-3.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 flex items-center justify-between">
                   <div>
                     <span className="text-[11px] text-emerald-400 font-mono block">
-                      Score Awarded:
+                      {submission.degradedMode ? 'Grading Status:' : 'Score Awarded:'}
                     </span>
                     <div className="text-xl font-bold font-mono text-white mt-0.5">
-                      {submission.score}{' '}
-                      <span className="text-xs text-zinc-400 font-normal">
-                        / {submission.totalMarks} Marks
-                      </span>
+                      {submission.score !== null && submission.score !== undefined ? (
+                        <>
+                          {submission.score}{' '}
+                          <span className="text-xs text-zinc-400 font-normal">
+                            / {submission.totalMarks} Marks
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm font-semibold text-amber-300">
+                          Pending Instructor Review
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -934,6 +1014,233 @@ export const ActiveStudyRoom: React.FC<ActiveStudyRoomProps> = ({
                     <span className="text-amber-400 font-mono text-[11px]">
                       ✓ Flagged for Review
                     </span>
+                  )}
+                </div>
+
+                {/* 5-Question User Feedback Loop Card */}
+                <div className="pt-3 border-t border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-300 font-mono flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                      Help Improve Future Evaluations
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFeedbackOpen(!feedbackOpen)}
+                      className="text-[11px] text-indigo-400 hover:underline cursor-pointer"
+                    >
+                      {feedbackOpen ? 'Collapse' : 'Rate this Answer'}
+                    </button>
+                  </div>
+
+                  {feedbackOpen && (
+                    <div className="p-3.5 rounded-lg bg-[#141416] border border-zinc-800 space-y-3 text-xs">
+                      {feedbackSubmitted ? (
+                        <div className="p-3 rounded bg-emerald-950/30 border border-emerald-500/30 text-emerald-300 text-center font-mono text-[11px]">
+                          ✓ Thank you! Your feedback helps calibrate the RGPV evaluation benchmark.
+                        </div>
+                      ) : (
+                        <>
+                          {/* Q1: Was this explanation helpful? */}
+                          <div className="space-y-1">
+                            <span className="text-zinc-300 text-[11px] block">
+                              1. Was this explanation helpful?
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackHelpful(true)}
+                                className={`px-2.5 py-1 rounded border text-[11px] flex items-center gap-1 cursor-pointer transition-colors ${
+                                  feedbackHelpful === true
+                                    ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                <ThumbsUp className="w-3 h-3" />
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackHelpful(false)}
+                                className={`px-2.5 py-1 rounded border text-[11px] flex items-center gap-1 cursor-pointer transition-colors ${
+                                  feedbackHelpful === false
+                                    ? 'bg-rose-950/40 border-rose-500 text-rose-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                <ThumbsDown className="w-3 h-3" />
+                                No
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Q2: Was the grade fair? */}
+                          <div className="space-y-1">
+                            <span className="text-zinc-300 text-[11px] block">
+                              2. Was the grade fair?
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackGradeFair(true)}
+                                className={`px-2.5 py-1 rounded border text-[11px] cursor-pointer transition-colors ${
+                                  feedbackGradeFair === true
+                                    ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackGradeFair(false)}
+                                className={`px-2.5 py-1 rounded border text-[11px] cursor-pointer transition-colors ${
+                                  feedbackGradeFair === false
+                                    ? 'bg-rose-950/40 border-rose-500 text-rose-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                No
+                              </button>
+                              {feedbackGradeFair === false && (
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  max={submission.totalMarks}
+                                  placeholder="Fair Score"
+                                  value={feedbackSuggestedScore}
+                                  onChange={(e) => setFeedbackSuggestedScore(e.target.value)}
+                                  className="w-24 bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-[11px] text-zinc-200"
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Q3: Was any citation incorrect? */}
+                          <div className="space-y-1">
+                            <span className="text-zinc-300 text-[11px] block">
+                              3. Was any citation incorrect?
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackCitationAccurate(true)}
+                                className={`px-2.5 py-1 rounded border text-[11px] cursor-pointer transition-colors ${
+                                  feedbackCitationAccurate === true
+                                    ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Citations Accurate
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackCitationAccurate(false)}
+                                className={`px-2.5 py-1 rounded border text-[11px] cursor-pointer transition-colors ${
+                                  feedbackCitationAccurate === false
+                                    ? 'bg-rose-950/40 border-rose-500 text-rose-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Citation Incorrect
+                              </button>
+                            </div>
+                            {feedbackCitationAccurate === false && (
+                              <input
+                                type="text"
+                                placeholder="Describe citation issue (e.g. wrong page or textbook)..."
+                                value={feedbackCitationDetails}
+                                onChange={(e) => setFeedbackCitationDetails(e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[11px] text-zinc-200 mt-1"
+                              />
+                            )}
+                          </div>
+
+                          {/* Q4: Was a topic missing? */}
+                          <div className="space-y-1">
+                            <span className="text-zinc-300 text-[11px] block">
+                              4. Was a topic or equation missing?
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackTopicMissing(false)}
+                                className={`px-2.5 py-1 rounded border text-[11px] cursor-pointer transition-colors ${
+                                  feedbackTopicMissing === false
+                                    ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Complete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackTopicMissing(true)}
+                                className={`px-2.5 py-1 rounded border text-[11px] cursor-pointer transition-colors ${
+                                  feedbackTopicMissing === true
+                                    ? 'bg-amber-950/40 border-amber-500 text-amber-300'
+                                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                Missing Topics
+                              </button>
+                            </div>
+                            {feedbackTopicMissing === true && (
+                              <input
+                                type="text"
+                                placeholder="What topic or derivation was missing?"
+                                value={feedbackMissingDetails}
+                                onChange={(e) => setFeedbackMissingDetails(e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[11px] text-zinc-200 mt-1"
+                              />
+                            )}
+                          </div>
+
+                          {/* Q5: Should this material be flagged? */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-zinc-300 text-[11px]">
+                                5. Flag this material?
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackFlagged(!feedbackFlagged)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 cursor-pointer ${
+                                  feedbackFlagged
+                                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                                    : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                                }`}
+                              >
+                                <Flag className="w-3 h-3" />
+                                {feedbackFlagged ? 'Flagged' : 'Flag'}
+                              </button>
+                            </div>
+                            {feedbackFlagged && (
+                              <input
+                                type="text"
+                                placeholder="Reason for flagging (e.g. inaccurate derivation)..."
+                                value={feedbackFlagReason}
+                                onChange={(e) => setFeedbackFlagReason(e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[11px] text-zinc-200 mt-1"
+                              />
+                            )}
+                          </div>
+
+                          {/* Submit Feedback Button */}
+                          <div className="pt-1 flex justify-end">
+                            <button
+                              type="button"
+                              disabled={isSubmittingFeedback}
+                              onClick={handleFeedbackSubmit}
+                              className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
 
