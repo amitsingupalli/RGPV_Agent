@@ -6,7 +6,9 @@ import pytest
 
 def test_secret_files_are_gitignored():
     """Verifies that .env, env.txt, and secret files are strictly listed in .gitignore."""
-    gitignore_path = os.path.abspath(".gitignore")
+    gitignore_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".gitignore"))
+    if not os.path.exists(gitignore_path):
+        gitignore_path = os.path.abspath(".gitignore")
     assert os.path.exists(gitignore_path), ".gitignore file must exist in repository root."
 
     with open(gitignore_path, "r", encoding="utf-8") as f:

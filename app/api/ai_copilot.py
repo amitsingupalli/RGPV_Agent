@@ -775,6 +775,7 @@ Return strictly valid JSON with this exact schema:
         "source": "degraded_fallback",
         "guardrail_status": "degraded",
         "is_ai_draft": True,
+        "disclaimer": "AI-Generated Draft: Review against official RGPV scheme before final exams.",
         "notice": "Live AI generation is temporarily unavailable. Standard curriculum model answer provided.",
         "data": {
             "typicalQuestion": f"Explain the fundamental concepts, governing formulas, and applications of {req.topicTitle}.",
@@ -967,6 +968,7 @@ Return strictly valid JSON with this exact schema:
         "source": "degraded_fallback",
         "guardrail_status": "degraded",
         "is_ai_draft": True,
+        "disclaimer": "AI-Generated Evaluation: Subject to instructor review upon appeal.",
         "notice": "Your answer was saved, but automatic grading is temporarily unavailable. Please review the model answer and rubric.",
         "data": {
             "score": None,
